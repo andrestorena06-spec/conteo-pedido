@@ -142,6 +142,7 @@ input:disabled{background:var(--sunk);color:var(--ink);opacity:1;border-color:tr
     <div class="hdr" id="hdr" hidden><button id="hdrRefresh" type="button">Actualizar</button><button id="hdrLogout" type="button">Salir</button></div></div>
   <nav class="tabs" role="tablist" id="tabs">
     <button role="tab" data-tab="pedido">Pedido</button>
+    <button role="tab" data-tab="panes">Panes</button>
     <button role="tab" data-tab="conteo">Conteo</button>
     <button role="tab" data-tab="ordenes">Órdenes</button>
     <button role="tab" data-tab="gc">GC por día</button>
@@ -190,7 +191,7 @@ const REMAP={"26/756":"26/232","67/1":"67/279","2679/65":"2679/395","340/0":"340
 
 /* ================= state ================= */
 const DEFAULT_CONFIG={countOrder:[],pedidoOrder:[],subSize:{},usoBase:"us",safety:0,countBeforeDelivery:true,countDays:[1,4],trailer:"2058 ANT",showAllInPedido:false};
-const S={catalog:null,config:{...DEFAULT_CONFIG},counts:{},orders:{},movs:{},gc:{},ready:false,
+const S={catalog:null,config:{...DEFAULT_CONFIG},counts:{},orders:{},movs:{},gc:{},panes:{uso:{},conteos:{},pedidos:{}},ready:false,
   ui:{tab:"pedido",countDate:null,countSearch:"",countFilter:"all",countSort:"mine",sorting:false,editing:{},pedDate:null,pedUnit:"cajas",pedFilter:"all",pedSearch:"",pedDraft:{},
       ordPreview:null,catSearch:"",gcFrom:null,confirm:null,xls:null,movTipo:"sale",login:null}};
 const cat=()=>S.catalog?.items||{};
@@ -221,7 +222,8 @@ function ingest(coll,docs){
   if(coll==="store"){for(const[id,d]of Object.entries(docs)){if(pending["store/"+id])continue;
     if(id==="catalog"){const items={};(d.items||[]).forEach(i=>items[i.w]=i);S.catalog={items,reportDate:d.reportDate,source:d.source}}
     if(id==="config")S.config={...DEFAULT_CONFIG,...d};
-    if(id==="gc")S.gc=d.days||{};}return}
+    if(id==="gc")S.gc=d.days||{};
+    if(id==="panes")S.panes={uso:{},conteos:{},pedidos:{},...d};}return}
   const key={conteos:"counts",ordenes:"orders",movimientos:"movs"}[coll];if(!key)return;
   const next={...docs};for(const id of Object.keys(S[key]))if(pending[coll+"/"+id])next[id]=S[key][id];
   S[key]=next;
@@ -553,7 +555,7 @@ function render(){
   $("#tabs").hidden=false;
   document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===S.ui.tab));
   const m=$("#main");if(!S.ready){m.innerHTML=loadingHTML();return}
-  const fn={pedido:renderPedido,conteo:renderConteo,ordenes:renderOrdenes,gc:renderGC,ajustes:renderAjustes}[S.ui.tab];
+  const fn={panes:renderPanes,pedido:renderPedido,conteo:renderConteo,ordenes:renderOrdenes,gc:renderGC,ajustes:renderAjustes}[S.ui.tab];
   const sx=window.scrollX,sy=window.scrollY,frames=[...m.querySelectorAll(".tframe")].map(f=>f.scrollLeft);
   const det=[...m.querySelectorAll("details[id]")].filter(d=>d.open).map(d=>d.id);
   m.innerHTML=fn();
@@ -831,6 +833,100 @@ function renderAjustes(){
   </div>`;
 }
 
+/* ================= Panes ================= */
+const PAN_W=["1/922","2/833","3/703","6053/132"];
+const PAN_ORDER_DAYS={0:3,1:4,4:4};          // domingo→miércoles, lunes→viernes, jueves→lunes (días hasta la llegada)
+const PAN_DELIVERY_DAYS=[1,3,5];              // lunes, miércoles, viernes
+const savePanes=()=>persist("store/panes",S.panes,700);
+function panUso(w){const v=S.panes.uso?.[w];if(v!=null&&v!=="")return{v:Number(v),manual:true};const r=item(w)?.us;return{v:r??null,manual:false}}
+function panStock(T,w){const e=S.panes.conteos?.[T]?.[w];if(!e)return null;const[c,u]=e;if(c==null&&u==null)return null;return(c||0)*(item(w)?.cc||0)+(u||0)}
+function panDates(){return Object.keys(S.panes.conteos||{}).filter(k=>Object.values(S.panes.conteos[k]||{}).some(e=>e&&(e[0]!=null||e[1]!=null))).sort()}
+function panPlan(T){
+  const breads=PAN_W.filter(w=>item(w));
+  const orders=[];for(let d=T,i=0;orders.length<3&&i<14;d=addDays(d,1),i++){const k=dow(d);if(k in PAN_ORDER_DAYS){
+    const R=addDays(d,PAN_ORDER_DAYS[k]);let Rn=addDays(R,1);while(!PAN_DELIVERY_DAYS.includes(dow(Rn)))Rn=addDays(Rn,1);
+    orders.push({O:d,R,coverTo:addDays(Rn,-1)})}}
+  const horizon=orders.reduce((a,o)=>o.coverTo>a?o.coverTo:a,addDays(T,1));
+  const decisionR=new Set(orders.map(o=>o.R));
+  // entradas ya conocidas: pedidos de pan guardados (no los que decide este plan) + órdenes JBO
+  const known={};const add=(d,w,u,src)=>{(known[d]||(known[d]={}))[w]=((known[d]||{})[w]||0)+u;(known[d]._src||(known[d]._src=new Set())).add(src)};
+  for(const[R,p]of Object.entries(S.panes.pedidos||{})){if(R<=T||R>horizon||decisionR.has(R))continue;for(const w of breads){const q=Number(p.items?.[w])||0;if(q)add(R,w,q*(item(w).cc||0),"pan")}}
+  for(const o of Object.values(S.orders)){const R=o.deliveryDate;if(!R||R<=T||R>horizon)continue;for(const w of breads){const q=Number(o.items?.[w])||0;if(q)add(R,w,q*(item(w).cc||0),"jbo")}}
+  const days=[];for(let d=addDays(T,1);d<=horizon;d=addDays(d,1)){const g=S.gc[d]?.p;days.push({d,gc:g==null||g===""?null:Number(g),use:{},stock:{},inflow:{}})}
+  const useOf=(day,w)=>{const u=panUso(w).v;return day.gc!=null&&u!=null?day.gc/1000*u:0};
+  const stock={},result={};breads.forEach(w=>{stock[w]=panStock(T,w)??0;result[w]={}});
+  const draft=S.ui.panDraft||{};
+  for(const day of days){
+    const o=orders.find(x=>x.R===day.d);
+    for(const w of breads){
+      let inflow=known[day.d]?.[w]||0;
+      if(o){const cover=days.filter(x=>x.d>=o.R&&x.d<=o.coverTo);const need=cover.reduce((a,x)=>a+useOf(x,w),0);
+        const otherIn=cover.reduce((a,x)=>a+(known[x.d]?.[w]||0),0);
+        const avail=Math.max(0,stock[w])+otherIn;const cc=item(w).cc||1;
+        const sug=Math.max(0,Math.ceil((need-avail)/cc-1e-9));
+        const saved=S.panes.pedidos?.[o.R]?.items?.[w];
+        const qty=draft[o.R]?.[w]!=null?draft[o.R][w]:(saved!=null?Number(saved):sug);
+        result[w][o.R]={need,avail,sug,qty,saved:saved!=null};inflow+=qty*cc;}
+      day.inflow[w]=inflow;day.use[w]=useOf(day,w);const left=stock[w]+inflow-day.use[w];day.short=day.short||{};day.short[w]=left<0?-left:0;stock[w]=Math.max(0,left);day.stock[w]=stock[w];
+    }
+  }
+  const missGC=days.filter(x=>x.gc==null).map(x=>x.d);
+  return{T,breads,orders,days,known,result,missGC,horizon};
+}
+function renderPanes(){
+  if(!S.catalog)return noCatalog();
+  const breads=PAN_W.filter(w=>item(w));
+  const T=S.ui.panDate||(S.ui.panDate=todayKey());
+  const P=panPlan(T);const C=S.panes.conteos?.[T]||{};
+  const hasCount=breads.some(w=>panStock(T,w)!=null);
+  const general=S.counts[T]?.items;const canPull=general&&breads.some(w=>general[w]);
+  const short=breads.filter(w=>P.days.some(d=>d.short[w]>0.5));
+  const nm=w=>esc(item(w).d);
+  return`<div class="stack">
+  <div class="row"><h2>Pedido de panes</h2><span class="spacer"></span><label class="small muted" for="panDate">Conteo de pan del</label><input type="date" id="panDate" value="${T}"></div>
+  ${!hasCount?`<div class="note">Cargá el pan contado al cierre del ${fmtD(T)} para que el cálculo parta del stock real.${canPull?` <button class="link" id="panPull">Traer del conteo general del ${fmtD(T)}</button>`:""}</div>`:""}
+  ${P.missGC.length?`<div class="note">Faltan GC proyectados para ${P.missGC.map(d=>fmtD(d)).join(", ")}. Esos días cuentan como 0. Cargalos en <button class="link" data-go="gc">GC por día</button>.</div>`:""}
+  ${short.length?`<div class="note bad">Con lo que hay y lo que entra, faltaría pan antes de que llegue el próximo pedido: ${short.map(nm).join(", ")}. Revisá los días marcados en rojo.</div>`:""}
+  <div class="tframe"><table>
+    <thead><tr><th class="stick"></th>${breads.map(w=>`<th class="n">${nm(w)}<div class="w" style="text-transform:none">${w} · ${fmt(item(w).cc,0)}/cj</div></th>`).join("")}</tr></thead>
+    <tbody>
+      <tr><td class="stick"><b>Uso cada mil</b><div class="w">se carga a mano</div></td>${breads.map(w=>{const u=panUso(w);return`<td class="n"><input class="n" style="width:96px" inputmode="decimal" data-panuso="${w}" value="${S.panes.uso?.[w]??""}" placeholder="${u.v!=null?fmt(u.v,2):""}" aria-label="Uso cada mil de ${nm(w)}">${u.manual?"":`<div class="w">${u.v!=null?"reporte":"sin dato"}</div>`}</td>`}).join("")}</tr>
+      <tr><td class="stick"><b>Contado ${fmtD(T)}</b><div class="w">cajas + unidades</div></td>${breads.map(w=>{const e=C[w]||[];const s=panStock(T,w);return`<td class="n"><div class="row" style="gap:4px;flex-wrap:nowrap;justify-content:flex-end"><input class="n" style="width:58px" inputmode="decimal" data-panc="${w}" data-i="0" value="${e[0]??""}" placeholder="cj" aria-label="Cajas de ${nm(w)}"><input class="n" style="width:64px" inputmode="decimal" data-panc="${w}" data-i="1" value="${e[1]??""}" placeholder="un" aria-label="Unidades de ${nm(w)}"></div><div class="w">${s==null?"—":fmt(s,0)+" un"}</div></td>`}).join("")}</tr>
+    </tbody></table></div>
+
+  <h3 style="margin:6px 0 0">Pedidos a hacer</h3>
+  <div class="tframe"><table>
+    <thead><tr><th class="stick">Pedido</th>${breads.map(w=>`<th class="n order">${nm(w)} (cj)</th>`).join("")}<th></th></tr></thead>
+    <tbody>${P.orders.map(o=>{const saved=S.panes.pedidos?.[o.R];return`<tr>
+      <td class="stick"><b>${fmtD(o.O)} → llega ${fmtD(o.R)}</b><div class="w">cubre ${fmtD(o.R)} a ${fmtD(o.coverTo)}${saved?" · guardado":""}</div></td>
+      ${breads.map(w=>{const r=P.result[w][o.R];return`<td class="n order"><input class="n" inputmode="numeric" data-panped="${o.R}" data-w="${w}" value="${r.qty}" aria-label="Cajas de ${nm(w)} para el ${fmtD(o.R)}"><div class="w" title="Necesidad ${fmt(r.need,0)} un · disponible ${fmt(r.avail,0)} un">sug. ${r.sug} · nec. ${fmt(r.need,0)}</div></td>`}).join("")}
+      <td class="n"><button class="btn ${saved?"":"primary"}" data-pansave="${o.R}" data-o="${o.O}">${saved?"Actualizar":"Guardar"}</button></td></tr>`}).join("")}</tbody></table></div>
+
+  <h3 style="margin:6px 0 0">Proyección por día</h3>
+  <div class="tframe"><table>
+    <thead><tr><th class="stick">Día</th><th class="n">GC</th>${breads.map(w=>`<th class="n">Uso ${nm(w)}</th>`).join("")}</tr></thead>
+    <tbody>${P.days.map(d=>`<tr><td class="stick"><b>${fmtD(d.d)}</b></td><td class="n">${d.gc==null?'<span class="dim">—</span>':fmt(d.gc,0)}</td>
+      ${breads.map(w=>{const cc=item(w).cc||1;const inn=d.inflow[w];const st=d.stock[w];return`<td class="n">${fmt(d.use[w],0)}<div class="w">${inn?`<span style="color:var(--ok)">+${fmt(inn/cc,1)} cj</span> · `:""}${d.short[w]>0.5?`<span class="neg">falta ${fmt(d.short[w],0)}</span>`:`queda ${fmt(st,0)}`}</div></td>`}).join("")}</tr>`).join("")}</tbody></table></div>
+
+  <details class="panel" id="panInBox"><summary>Pan que ya está pedido y todavía no llegó</summary>
+    <div class="stack" style="margin-top:10px">
+    ${(()=>{const rows=Object.entries(S.panes.pedidos||{}).filter(([R])=>R>T&&!P.orders.some(o=>o.R===R)).sort();
+      const jbo=Object.values(S.orders).filter(o=>o.deliveryDate>T&&o.deliveryDate<=P.horizon&&breads.some(w=>o.items?.[w]));
+      return(rows.length||jbo.length?`<div class="tframe"><table><thead><tr><th>Llega</th>${breads.map(w=>`<th class="n">${nm(w)}</th>`).join("")}<th></th></tr></thead><tbody>
+        ${rows.map(([R,p])=>`<tr><td><b>${fmtD(R)}</b>${p.orderDate?`<div class="w">pedido ${fmtD(p.orderDate)}</div>`:""}</td>${breads.map(w=>`<td class="n">${p.items?.[w]||0}</td>`).join("")}
+          <td class="n">${S.ui.confirm==="p:"+R?`<button class="btn danger" data-delpan="${R}">Borrar</button> <button class="link" data-cancelconf>no</button>`:`<button class="link" data-askdel="p:${R}">borrar</button>`}</td></tr>`).join("")}
+        ${jbo.map(o=>`<tr><td><b>${fmtD(o.deliveryDate)}</b><div class="w">orden JBO</div></td>${breads.map(w=>`<td class="n">${o.items?.[w]||0}</td>`).join("")}<td></td></tr>`).join("")}
+        </tbody></table></div>`:`<p class="small muted" style="margin:0">No hay pan pendiente de llegar después del ${fmtD(T)}.</p>`)})()}
+    <form id="panInForm" class="stack" style="gap:10px"><div class="kv">
+      <label class="field"><span>Llega</span><input type="date" id="panInDate"></label>
+      ${breads.map(w=>`<label class="field"><span>${nm(w)} (cj)</span><input class="n" inputmode="numeric" data-panin="${w}"></label>`).join("")}</div>
+      <div class="row"><button class="btn" type="submit">Agregar pan pendiente</button><span class="small" id="panInMsg"></span></div></form>
+    <p class="small muted" style="margin:0">Los pedidos que guardás arriba ya cuentan solos. Acá cargás los que hiciste antes, por ejemplo el del lunes que llega el viernes. El pan que viene en una orden JBO también se suma.</p>
+    </div></details>
+  <p class="small muted">Uso del día = GC proyectados ÷ 1000 × uso cada mil. El conteo se toma al cierre del día elegido. Cada pedido cubre desde su llegada hasta el día antes de la siguiente llegada (lunes, miércoles o viernes), y descuenta lo que se proyecta que queda ese día más lo que ya está por llegar. Se redondea a cajas hacia arriba.</p>
+  </div>`;
+}
+
 /* ================= events ================= */
 function countDoc(D){return S.counts[D]||(S.counts[D]={date:D,items:{},status:"borrador"})}
 function saveCountDraft(D,delay=900){const d=S.counts[D];d.updatedAt=new Date().toISOString();if(d.status==="guardado"&&S.ui.editing[D])d.status="borrador";persist("conteos/"+D,d,delay)}
@@ -838,6 +934,11 @@ document.addEventListener("click",async e=>{
   const t=e.target.closest("button,[data-go]");if(!t)return;const ds=t.dataset;
   if(ds.tab){S.ui.tab=ds.tab;S.ui.confirm=null;try{history.replaceState(null,"","#"+ds.tab)}catch(_){}render();window.scrollTo(0,0);return}
   if(ds.go){S.ui.tab=ds.go;if(ds.date)S.ui.countDate=ds.date;render();window.scrollTo(0,0);return}
+  if(t.id==="panPull"){const T=S.ui.panDate,g=S.counts[T]?.items||{};const C=(S.panes.conteos||(S.panes.conteos={}))[T]||(S.panes.conteos[T]={});
+    PAN_W.forEach(w=>{const e=g[w];if(e){const it=item(w);const tot=entryTotal(w,e);const cc=it.cc||1;C[w]=[Math.floor(tot/cc),Math.round(tot-Math.floor(tot/cc)*cc)]}});savePanes();render();return}
+  if(ds.pansave){const R=ds.pansave;const P=panPlan(S.ui.panDate);const items={};P.breads.forEach(w=>{items[w]=P.result[w][R]?.qty||0});
+    (S.panes.pedidos||(S.panes.pedidos={}))[R]={orderDate:ds.o,items,ts:new Date().toISOString()};if(S.ui.panDraft)delete S.ui.panDraft[R];savePanes();render();toast("Pedido de pan guardado: llega el "+fmtD(R));return}
+  if(ds.delpan){delete S.panes.pedidos[ds.delpan];S.ui.confirm=null;savePanes();render();return}
   if(t.id==="goSetup"){S.ui.login={mode:"setup",msg:""};renderLogin();return}
   if(t.id==="goPw"){S.ui.login={mode:"pw",msg:""};renderLogin();return}
   if(t.id==="hdrRefresh"){if(A===GH){await flushAll();GH.refresh()}return}
@@ -893,6 +994,10 @@ document.addEventListener("click",async e=>{
   if(t.id==="usoTextBtn"){usoResult(parseUsoLines($("#usoText").value.split(/\r?\n/)),"texto pegado");return}
 });
 document.addEventListener("submit",e=>{
+  if(e.target.id==="panInForm"){e.preventDefault();const R=$("#panInDate").value,msg=$("#panInMsg");if(!R){msg.innerHTML='<span style="color:var(--bad)">Falta la fecha de llegada.</span>';return}
+    const items={};document.querySelectorAll("[data-panin]").forEach(i=>{const v=parseNum(i.value);if(v)items[i.dataset.panin]=v});
+    if(!Object.keys(items).length){msg.innerHTML='<span style="color:var(--bad)">Poné al menos una cantidad.</span>';return}
+    (S.panes.pedidos||(S.panes.pedidos={}))[R]={orderDate:null,items,ts:new Date().toISOString()};savePanes();render();toast("Pan pendiente agregado: llega el "+fmtD(R));return}
   if(e.target.id!=="movForm")return;e.preventDefault();
   const M=S.ui.mov;M.prod=$("#movProd").value;M.date=$("#movDate").value;M.cajas=$("#movCajas").value;M.unid=$("#movUnid").value;M.nota=$("#movNota").value;
   const msg=$("#movMsg");
@@ -931,12 +1036,17 @@ document.addEventListener("input",e=>{
   if(ds.gc){const v=parseNum(t.value);const d=S.gc[ds.d]||(S.gc[ds.d]={});if(v==null)delete d[ds.gc];else d[ds.gc]=v;if(!Object.keys(d).length)delete S.gc[ds.d];saveGC();return}
   if(ds.cc){const it=item(ds.cc),v=parseNum(t.value);if(it&&v){it.cc=v;saveCatalog()}return}
   if(ds.sub){const v=parseNum(t.value);S.config.subSize={...S.config.subSize};if(v)S.config.subSize[ds.sub]=v;else delete S.config.subSize[ds.sub];saveConfig();return}
+  if(ds.panuso){const v=parseNum(t.value);S.panes.uso={...S.panes.uso};if(v==null)delete S.panes.uso[ds.panuso];else S.panes.uso[ds.panuso]=v;savePanes();return}
+  if(ds.panc){const T=S.ui.panDate;const C=(S.panes.conteos||(S.panes.conteos={}))[T]||(S.panes.conteos[T]={});const e=(C[ds.panc]||[null,null]).slice();e[Number(ds.i)]=parseNum(t.value);C[ds.panc]=e;savePanes();return}
+  if(ds.panped){const D=S.ui.panDraft||(S.ui.panDraft={});(D[ds.panped]||(D[ds.panped]={}))[ds.w]=parseNum(t.value)??0;return}
   if(t.id==="cfgSafety"){S.config.safety=parseNum(t.value)||0;saveConfig();return}
   if(t.id==="cfgTrailer"){S.config.trailer=t.value.trim();saveConfig();return}
 });
 document.addEventListener("change",async e=>{
   const t=e.target,ds=t.dataset;
   if(t.id==="pedDate"){S.ui.pedDate=t.value;render();return}
+  if(t.id==="panDate"){if(t.value){S.ui.panDate=t.value;render()}return}
+  if(ds.panuso||ds.panc||ds.panped){render();return}
   if(t.id==="countDate"){if(t.value){S.ui.countDate=t.value;render()}return}
   if(t.id==="xlsDate"){if(S.ui.xls)S.ui.xls.date=t.value;render();return}
   if(t.id==="cfgUso"){S.config.usoBase=t.value;saveConfig();return}
@@ -974,7 +1084,7 @@ function wireDrag(){
     h.addEventListener("pointermove",move);h.addEventListener("pointerup",up);h.addEventListener("pointercancel",up);
   }));
 }
-(function(){const h=(location.hash||"").slice(1);if(["pedido","conteo","ordenes","gc","ajustes"].includes(h))S.ui.tab=h})();
+(function(){const h=(location.hash||"").slice(1);if(["pedido","panes","conteo","ordenes","gc","ajustes"].includes(h))S.ui.tab=h})();
 window.addEventListener("pagehide",()=>{Object.keys(pending).forEach(flush)});
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")Object.keys(pending).forEach(flush)});
 render();boot();
