@@ -1,0 +1,983 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d5c4c"><meta name="apple-mobile-web-app-capable" content="yes">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head><body>
+<title>Conteo y Pedido</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: sticky tab bar over a single working sheet; dense tables that scroll inside their own frame. */
+:root{
+  --bg:#eef2f0; --surface:#ffffff; --sunk:#e3e9e6; --ink:#16201c; --muted:#5a6a63; --line:#cfd8d4;
+  --accent:#0d5c4c; --accent-ink:#ffffff; --tape:#f3c534; --tape-ink:#2a2200;
+  --bad:#b3261e; --bad-bg:#fbe5e3; --warn:#8a5a00; --warn-bg:#fff1cc; --ok:#2d6a31; --ok-bg:#e1f1e2;
+  --f-ui:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1513; --surface:#161e1b; --sunk:#1d2723; --ink:#e4ebe8; --muted:#94a39c; --line:#2b3632;
+  --accent:#5cc4a8; --accent-ink:#06231c; --tape:#e2b92c; --tape-ink:#1d1700;
+  --bad:#ff8a80; --bad-bg:#3a1714; --warn:#f2c46b; --warn-bg:#352a10; --ok:#8fd694; --ok-bg:#16301a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1513; --surface:#161e1b; --sunk:#1d2723; --ink:#e4ebe8; --muted:#94a39c; --line:#2b3632;
+  --accent:#5cc4a8; --accent-ink:#06231c; --tape:#e2b92c; --tape-ink:#1d1700;
+  --bad:#ff8a80; --bad-bg:#3a1714; --warn:#f2c46b; --warn-bg:#352a10; --ok:#8fd694; --ok-bg:#16301a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:16px;line-height:1.35}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.num,td.n,input.n{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+header.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px 0}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.01em}
+.brand .sync{font-size:13px;color:var(--muted)}
+nav.tabs{display:flex;gap:2px;overflow-x:auto;margin-top:8px;scrollbar-width:none}
+nav.tabs button{font:inherit;font-weight:600;font-size:15px;background:none;border:0;color:var(--muted);padding:8px 12px 10px;border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+main{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 48px;max-width:1280px;margin:0 auto}
+h2{font-size:22px;margin:0;text-wrap:balance}
+h3{font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 8px;font-weight:600}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.stack{display:flex;flex-direction:column;gap:14px}
+.spacer{flex:1}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+button.btn,label.btn{font:inherit;font-weight:600;font-size:15px;padding:8px 14px;border-radius:5px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px;min-height:40px}
+button.btn.primary,label.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.btn.danger{color:var(--bad);border-color:var(--bad)}
+button.btn:disabled{opacity:.5;cursor:default}
+button.btn:focus-visible,label.btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+button.link{font:inherit;background:none;border:0;color:var(--accent);cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:7px 9px;min-height:40px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+input[type=search]{min-width:0;flex:1 1 200px}
+input.n{text-align:right;width:100%}
+textarea{width:100%;min-height:160px;font-family:var(--f-num);font-size:13px}
+.seg{display:inline-flex;align-self:flex-start;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.seg button{font:inherit;font-size:14px;font-weight:600;border:0;background:var(--surface);color:var(--muted);padding:7px 11px;cursor:pointer;min-height:38px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:1px 7px;border-radius:999px;letter-spacing:.02em;white-space:nowrap}
+.chip.bad{background:var(--bad-bg);color:var(--bad)} .chip.warn{background:var(--warn-bg);color:var(--warn)} .chip.ok{background:var(--ok-bg);color:var(--ok)} .chip.neu{background:var(--sunk);color:var(--muted)}
+.note{padding:10px 12px;border-radius:5px;background:var(--warn-bg);color:var(--warn);font-size:14px}
+.note.info{background:var(--sunk);color:var(--muted)}
+.note.bad{background:var(--bad-bg);color:var(--bad)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.facts>div{background:var(--surface);padding:10px 12px;min-width:0}
+.facts .k{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.facts .v{font-size:18px;font-weight:600;margin-top:2px}
+.facts .v .num{font-size:17px}
+/* tables */
+.tframe{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--surface);max-width:100%}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;background:var(--sunk);position:sticky;top:0;white-space:nowrap}
+td.n,th.n{text-align:right;white-space:nowrap}
+tbody tr:hover td{background:color-mix(in srgb,var(--sunk) 55%,transparent)}
+td.prod{min-width:150px}
+td.prod b{font-weight:600}
+.w{font-family:var(--f-num);font-size:12px;color:var(--muted)}
+th.stick,td.stick{position:sticky;left:0;background:var(--surface);z-index:1;box-shadow:1px 0 0 var(--line)}
+th.stick{background:var(--sunk);z-index:2}
+td.order{background:color-mix(in srgb,var(--tape) 22%,var(--surface))}
+th.order{background:var(--tape);color:var(--tape-ink)}
+td.order input{width:76px;font-weight:600}
+.neg{color:var(--bad)}
+.dim{color:var(--muted)}
+/* count list */
+.clist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:6px;background:var(--surface);overflow:hidden}
+.crow{display:grid;grid-template-columns:minmax(0,1fr) 84px 84px 84px 120px;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
+.crow:last-child{border-bottom:0}
+.crow.head{background:var(--sunk);font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;padding-block:6px}
+.crow.done .pname b::after{content:" ✓";color:var(--ok)}
+.crow .pname{min-width:0}
+.crow .pname b{font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.crow .tot{text-align:right}
+.crow .tot .num{font-weight:600}
+.crow .lbl{display:none}
+.crow.sorting{grid-template-columns:36px minmax(0,1fr) auto}
+.handle{cursor:grab;touch-action:none;user-select:none;font-size:20px;color:var(--muted);text-align:center;line-height:1}
+.crow.dragging{opacity:.4}
+.crow.dropbefore{box-shadow:inset 0 3px 0 var(--accent)}
+.mini{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:4px;min-width:36px;min-height:34px;cursor:pointer}
+@media (max-width:640px){
+  .crow{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:6px}
+  .crow .pname{grid-column:1/-1;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .crow .tot{grid-column:1/-1;text-align:left}
+  .crow.head{display:none}
+  .crow .lbl{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .crow.sorting{grid-template-columns:36px minmax(0,1fr) auto}
+  .crow.sorting .pname{grid-column:auto;display:block}
+}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--ink);font-size:18px;margin-bottom:4px}
+details summary{cursor:pointer;font-weight:600}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.gc td input{width:110px}
+.gc tr.cyc td{background:var(--sunk);font-size:13px;color:var(--muted);font-weight:600}
+.gc tr.today td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:6px;font-weight:600;z-index:20;max-width:calc(100% - 32px)}
+@media (prefers-reduced-motion:no-preference){.toast{animation:up .18s ease-out}@keyframes up{from{transform:translate(-50%,8px);opacity:0}}}
+
+.brand .hdr{margin-left:auto;display:flex;gap:6px;align-items:center}
+.brand .hdr button{font:inherit;font-size:14px;font-weight:600;background:none;border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:4px 10px;cursor:pointer;min-height:32px}
+.login{max-width:520px;margin:24px auto}
+.login ol{padding-left:20px;margin:0;display:flex;flex-direction:column;gap:6px}
+.login code{font-family:var(--f-num);font-size:13px;background:var(--sunk);padding:1px 5px;border-radius:3px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field span{font-weight:600}
+input:disabled{background:var(--sunk);color:var(--ink);opacity:1;border-color:transparent}
+.savebar{position:sticky;bottom:0;z-index:4;background:var(--surface);border-top:1px solid var(--line);padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-radius:0 0 6px 6px}
+.kv{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.kv .field{flex:1 1 120px;min-width:0}
+.kv .field.wide{flex:3 1 220px}
+</style>
+
+
+<header class="bar">
+  <div class="brand"><h1>Conteo y Pedido</h1><span class="sync" id="sync">Cargando…</span>
+    <div class="hdr" id="hdr" hidden><button id="hdrRefresh" type="button">Actualizar</button><button id="hdrLogout" type="button">Salir</button></div></div>
+  <nav class="tabs" role="tablist" id="tabs">
+    <button role="tab" data-tab="pedido">Pedido</button>
+    <button role="tab" data-tab="conteo">Conteo</button>
+    <button role="tab" data-tab="ordenes">Órdenes</button>
+    <button role="tab" data-tab="gc">GC por día</button>
+    <button role="tab" data-tab="ajustes">Catálogo y ajustes</button>
+  </nav>
+</header>
+<main id="main"><div class="empty"><b>Cargando…</b>Leyendo conteos, órdenes y proyección guardados.</div></main>
+<div id="toast" class="toast" hidden></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+"use strict";
+/* ================= utilities ================= */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const DOW=["dom","lun","mar","mié","jue","vie","sáb"];
+const DOWL=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+function toKey(d){return d.toISOString().slice(0,10)}
+function fromKey(k){const [y,m,d]=k.split("-").map(Number);return new Date(Date.UTC(y,m-1,d))}
+function addDays(k,n){const d=fromKey(k);d.setUTCDate(d.getUTCDate()+n);return toKey(d)}
+function dow(k){return fromKey(k).getUTCDay()}
+function todayKey(){const n=new Date();return toKey(new Date(Date.UTC(n.getFullYear(),n.getMonth(),n.getDate())))}
+function fmtD(k,long){if(!k)return"—";const d=fromKey(k);const s=String(d.getUTCDate()).padStart(2,"0")+"/"+String(d.getUTCMonth()+1).padStart(2,"0");return (long?DOWL[d.getUTCDay()]:DOW[d.getUTCDay()])+" "+s}
+function fmtTS(iso){if(!iso)return"";const d=new Date(iso);return d.toLocaleDateString("es-UY",{day:"2-digit",month:"2-digit"})+" "+d.toLocaleTimeString("es-UY",{hour:"2-digit",minute:"2-digit"})}
+function yymmdd(k){return k.slice(2,4)+k.slice(5,7)+k.slice(8,10)}
+function parseNum(v){if(v==null)return null;if(typeof v==="number")return isFinite(v)?v:null;let s=String(v).trim();if(!s)return null;
+  if(/^-?[\d.]+,\d+$/.test(s)||/^-?\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,"").replace(",",".");else s=s.replace(",",".");
+  const n=Number(s);return isFinite(n)?n:null}
+function esNum(s){return Number(String(s).trim().replace(/\./g,"").replace(",","."))}
+const nf1=new Intl.NumberFormat("es-UY",{maximumFractionDigits:1});
+const nf2=new Intl.NumberFormat("es-UY",{maximumFractionDigits:2});
+const nf0=new Intl.NumberFormat("es-UY",{maximumFractionDigits:0});
+function fmt(n,d=1){if(n==null||!isFinite(n))return"—";if(Math.abs(n)<0.05&&d<=1)return"0";return(d===0?nf0:d===2?nf2:nf1).format(n)}
+function wrin8(w){const[a,b]=w.split("/");return String(a).padStart(5,"0")+String(b).padStart(3,"0")}
+function normWrin(v){if(v==null)return null;const s=String(v).replace(/[\s ]/g,"");const m=s.match(/^(\d+)\/(\d+)$/);return m?Number(m[1])+"/"+Number(m[2]):null}
+function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
+function lsGet(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function lsDel(k){try{localStorage.removeItem(k)}catch(e){}}
+function b64enc(str){const b=new TextEncoder().encode(str);let s="";for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(s)}
+function b64dec(b64){const bin=atob(b64.replace(/\s/g,""));const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new TextDecoder().decode(u)}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+/* WRIN codes that changed between the old count sheet and the current usage report */
+const REMAP={"26/756":"26/232","67/1":"67/279","2679/65":"2679/395","340/0":"340/69","830/3":"830/36","2180/3":"2180/12","9300/952":"9300/955"};
+
+/* ================= state ================= */
+const DEFAULT_CONFIG={countOrder:[],pedidoOrder:[],subSize:{},usoBase:"us",safety:0,countBeforeDelivery:true,countDays:[1,4],trailer:"2058 ANT",showAllInPedido:false};
+const S={catalog:null,config:{...DEFAULT_CONFIG},counts:{},orders:{},movs:{},gc:{},ready:false,
+  ui:{tab:"pedido",countDate:null,countSearch:"",countFilter:"all",countSort:"mine",sorting:false,editing:{},pedDate:null,pedUnit:"cajas",pedFilter:"all",pedSearch:"",pedDraft:{},
+      ordPreview:null,catSearch:"",gcFrom:null,confirm:null,xls:null,movTipo:"sale",login:null}};
+const cat=()=>S.catalog?.items||{};
+function item(w){return cat()[w]}
+
+/* ================= storage adapters ================= */
+/* Every document lives at "<collection>/<id>": store/catalog, store/config, store/gc, conteos/<fecha>, ordenes/<fecha llegada>, movimientos/<yyyy-mm> */
+let A=null;            // active adapter
+const pending={};      // path -> {data,t}
+function persist(path,data,delay){
+  clearTimeout(pending[path]?.t);
+  const d=(delay??800)*(A?.slow||1);
+  pending[path]={data,t:setTimeout(()=>flush(path),d)};
+  setSync("Cambios sin guardar…");
+}
+async function flush(path){
+  const p=pending[path];if(!p)return;clearTimeout(p.t);delete pending[path];
+  setSync("Guardando…");
+  try{await A.write(path,p.data);if(!Object.keys(pending).length)setSync(A.savedLabel)}
+  catch(e){console.error(e);setSync("No se pudo guardar: "+(e.message||e.code||"error"));pending[path]=pending[path]||{data:p.data,t:setTimeout(()=>flush(path),15000)}}
+}
+async function flushAll(){await Promise.all(Object.keys(pending).map(flush))}
+async function removeDoc(path){try{await A.del(path)}catch(e){console.error(e);toast("No se pudo borrar: "+(e.message||e.code))}}
+function setSync(t){const el=$("#sync");if(el)el.textContent=t}
+
+/* apply a whole collection snapshot without clobbering local unsaved edits */
+function ingest(coll,docs){
+  if(coll==="store"){for(const[id,d]of Object.entries(docs)){if(pending["store/"+id])continue;
+    if(id==="catalog"){const items={};(d.items||[]).forEach(i=>items[i.w]=i);S.catalog={items,reportDate:d.reportDate,source:d.source}}
+    if(id==="config")S.config={...DEFAULT_CONFIG,...d};
+    if(id==="gc")S.gc=d.days||{};}return}
+  const key={conteos:"counts",ordenes:"orders",movimientos:"movs"}[coll];if(!key)return;
+  const next={...docs};for(const id of Object.keys(S[key]))if(pending[coll+"/"+id])next[id]=S[key][id];
+  S[key]=next;
+}
+
+const DbAdapter=db=>({
+  name:"claude",slow:1,savedLabel:"Guardado",
+  start(){const cols=["store","conteos","ordenes","movimientos"];const seen=new Set();
+    cols.forEach(c=>db.collection(c).onSnapshot(snap=>{const docs={};snap.docs.forEach(d=>{if(!d.metadata.hasPendingWrites||!pending[c+"/"+d.id])docs[d.id]=d.data()});
+      ingest(c,docs);seen.add(c);if(seen.size===cols.length&&!S.ready){S.ready=true;setSync("Sincronizado");render()}else if(S.ready)softRender(c)},
+      e=>setSync("Sin conexión con los datos ("+e.code+")")));},
+  write(path,data){return db.doc(path).set(data)},
+  del(path){return db.doc(path).delete()},
+});
+const LocalAdapter={
+  name:"local",slow:1,savedLabel:"Guardado en este dispositivo",
+  start(){const all=lsGet("cyp-local",{});const by={store:{},conteos:{},ordenes:{},movimientos:{}};
+    for(const[p,d]of Object.entries(all)){const[c,id]=p.split("/");if(by[c])by[c][id]=d}
+    Object.entries(by).forEach(([c,docs])=>ingest(c,docs));S.ready=true;setSync("Modo local: los datos quedan solo en este dispositivo");render()},
+  async write(path,data){const all=lsGet("cyp-local",{});all[path]=data;lsSet("cyp-local",all)},
+  async del(path){const all=lsGet("cyp-local",{});delete all[path];lsSet("cyp-local",all)},
+};
+const GH={
+  name:"github",slow:4,savedLabel:"Guardado en GitHub",creds:null,meta:{},queue:Promise.resolve(),
+  api(path,opt={}){return fetch("https://api.github.com/repos/"+this.creds.repo+path,{...opt,cache:"no-store",
+    headers:{Authorization:"Bearer "+this.creds.token,Accept:"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28",...(opt.headers||{})}})},
+  async check(){const r=await this.api("");
+    if(r.status===401)throw new Error("El token no es válido o venció.");
+    if(r.status===404||r.status===403)throw new Error("No encuentro el repositorio, o el token no tiene acceso a él.");
+    if(!r.ok)throw new Error("GitHub respondió "+r.status+".");
+    const j=await r.json();if(j.permissions&&j.permissions.push===false)throw new Error("El token puede leer pero no escribir. Dale permiso Contents: Read and write.");return j},
+  async start(){this.meta=lsGet("cyp-ghcache-"+this.creds.repo,{});await this.refresh(true);setInterval(()=>{if(document.visibilityState==="visible")this.refresh()},90000);
+    document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")this.refresh()})},
+  async refresh(first){
+    if(this._busy)return;this._busy=true;if(!first)setSync("Buscando cambios…");
+    try{
+      const r=await this.api("/git/trees/HEAD?recursive=1");
+      let files=[];
+      if(r.ok){files=(await r.json()).tree.filter(t=>t.type==="blob"&&/^(store|conteos|ordenes|movimientos)\/[^/]+\.json$/.test(t.path))}
+      else if(r.status===401){logout("Tu sesión venció. Volvé a ingresar el token.");return}
+      else if(r.status!==409&&r.status!==404)throw new Error("GitHub respondió "+r.status);
+      const live={};
+      await Promise.all(files.map(async f=>{const p=f.path.slice(0,-5);live[p]=1;
+        if(this.meta[p]?.sha===f.sha)return;
+        const b=await this.api("/git/blobs/"+f.sha);if(!b.ok)throw new Error("No pude leer "+p);
+        this.meta[p]={sha:f.sha,data:JSON.parse(b64dec((await b.json()).content))};}));
+      for(const p of Object.keys(this.meta))if(!live[p])delete this.meta[p];
+      lsSet("cyp-ghcache-"+this.creds.repo,this.meta);
+      const by={store:{},conteos:{},ordenes:{},movimientos:{}};
+      for(const[p,m]of Object.entries(this.meta)){const[c,id]=p.split("/");by[c][id]=m.data}
+      Object.entries(by).forEach(([c,docs])=>ingest(c,docs));
+      setSync(Object.keys(pending).length?"Cambios sin guardar…":"Sincronizado "+new Date().toLocaleTimeString("es-UY",{hour:"2-digit",minute:"2-digit"}));
+      if(!S.ready){S.ready=true;render()}else softRender("all");
+    }catch(e){console.error(e);setSync("Sin conexión con GitHub: "+e.message);if(!S.ready){S.ready=true;render()}}
+    finally{this._busy=false}
+  },
+  write(path,data){const run=this.queue.then(()=>this._put(path,data));this.queue=run.catch(()=>{});return run},
+  del(path){const run=this.queue.then(()=>this._del(path));this.queue=run.catch(()=>{});return run},
+  async _sha(path){const r=await this.api("/contents/"+path+".json");if(r.status===404)return undefined;if(!r.ok)throw new Error("GitHub "+r.status);return(await r.json()).sha},
+  async _put(path,data,retry){
+    const body={message:"Actualiza "+path,content:b64enc(JSON.stringify(data,null,1))};const sha=this.meta[path]?.sha;if(sha)body.sha=sha;
+    const r=await this.api("/contents/"+path+".json",{method:"PUT",body:JSON.stringify(body)});
+    if((r.status===409||r.status===422)&&!retry){const cur=await this._sha(path);this.meta[path]={sha:cur,data:this.meta[path]?.data};if(!cur)delete this.meta[path];return this._put(path,data,true)}
+    if(r.status===401){logout("Tu sesión venció. Volvé a ingresar el token.");throw new Error("sesión vencida")}
+    if(!r.ok)throw new Error("GitHub respondió "+r.status);
+    const j=await r.json();this.meta[path]={sha:j.content.sha,data};lsSet("cyp-ghcache-"+this.creds.repo,this.meta);
+  },
+  async _del(path){let sha=this.meta[path]?.sha||await this._sha(path);if(!sha)return;
+    let r=await this.api("/contents/"+path+".json",{method:"DELETE",body:JSON.stringify({message:"Borra "+path,sha})});
+    if(r.status===409||r.status===422){sha=await this._sha(path);if(!sha)return;r=await this.api("/contents/"+path+".json",{method:"DELETE",body:JSON.stringify({message:"Borra "+path,sha})})}
+    if(!r.ok&&r.status!==404)throw new Error("GitHub respondió "+r.status);delete this.meta[path];lsSet("cyp-ghcache-"+this.creds.repo,this.meta)},
+};
+function logout(msg){if(A===GH&&GH.creds)lsDel("cyp-ghcache-"+GH.creds.repo);lsDel("cyp-gh");try{sessionStorage.removeItem("cyp-gh")}catch(_){}GH.creds=null;location.hash="";S.ready=false;showLogin(msg||"")}
+
+async function boot(){
+  if(window.__CYP_LOCAL){A=LocalAdapter;A.start();return}
+  if(window.claude&&typeof window.claude.use==="function"){
+    let db=null;try{db=await window.claude.use("db")}catch(e){}
+    A=db?DbAdapter(db):LocalAdapter;A.start();return}
+  let creds=lsGet("cyp-gh",null);if(!creds){try{creds=JSON.parse(sessionStorage.getItem("cyp-gh")||"null")}catch(_){}}
+  if(!creds){showLogin("");return}
+  startGH(creds);
+}
+function startGH(creds){GH.creds=creds;A=GH;S.ui.login=null;$("#tabs").hidden=false;$("#hdr").hidden=false;$("#main").innerHTML=loadingHTML();setSync("Conectando con GitHub…");GH.start()}
+
+/* ================= single-password access (GitHub version) =================
+   acceso.json in the public app repo holds {repo, token} encrypted with AES-GCM; the key comes from the password via PBKDF2.
+   The password itself is never stored anywhere. */
+const ACCESS_ITER=600000;
+const bytesToB64=b=>{let s="";for(let i=0;i<b.length;i++)s+=String.fromCharCode(b[i]);return btoa(s)};
+const b64ToBytes=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function pwKey(pw,salt,iter){const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:iter,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"])}
+async function seal(obj,pw){const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},await pwKey(pw,salt,ACCESS_ITER),new TextEncoder().encode(JSON.stringify(obj)));
+  return{v:1,iter:ACCESS_ITER,salt:bytesToB64(salt),iv:bytesToB64(iv),ct:bytesToB64(new Uint8Array(ct))}}
+async function unseal(box,pw){const key=await pwKey(pw,b64ToBytes(box.salt),box.iter);
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:b64ToBytes(box.iv)},key,b64ToBytes(box.ct));return JSON.parse(new TextDecoder().decode(pt))}
+function detectAppRepo(){const h=location.hostname.match(/^([\w-]+)\.github\.io$/i);if(!h)return"";const seg=location.pathname.split("/").filter(Boolean)[0];
+  return h[1]+"/"+(seg&&!seg.includes(".")?seg:h[1]+".github.io")}
+async function fetchAccess(){
+  const app=detectAppRepo();
+  if(app){try{const r=await fetch(`https://api.github.com/repos/${app}/contents/acceso.json`,{cache:"no-store",headers:{Accept:"application/vnd.github.raw+json"}});
+    if(r.ok)return await r.json();if(r.status===404)return null}catch(_){}}
+  try{const r=await fetch("acceso.json?t="+Date.now(),{cache:"no-store"});if(r.ok)return await r.json()}catch(_){}
+  return null;
+}
+async function ghRepoCheck(repo,token){
+  const r=await fetch("https://api.github.com/repos/"+repo,{cache:"no-store",headers:{Authorization:"Bearer "+token,Accept:"application/vnd.github+json"}});
+  if(r.status===401)throw new Error("El token no es válido o venció.");
+  if(r.status===404||r.status===403)throw new Error(`El token no tiene acceso a ${repo}.`);
+  if(!r.ok)throw new Error("GitHub respondió "+r.status+".");
+  const j=await r.json();if(j.permissions&&j.permissions.push===false)throw new Error(`El token puede leer ${repo} pero no escribir. Dale Contents: Read and write.`);
+}
+async function writeAccess(app,token,box){
+  const H={Authorization:"Bearer "+token,Accept:"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"};
+  const g=await fetch(`https://api.github.com/repos/${app}/contents/acceso.json`,{cache:"no-store",headers:H});const sha=g.ok?(await g.json()).sha:undefined;
+  const body={message:"Actualiza acceso",content:b64enc(JSON.stringify(box,null,1))};if(sha)body.sha=sha;
+  const r=await fetch(`https://api.github.com/repos/${app}/contents/acceso.json`,{method:"PUT",headers:H,body:JSON.stringify(body)});
+  if(!r.ok)throw new Error(`No pude guardar el acceso en ${app} (GitHub ${r.status}).`);
+}
+async function showLogin(msg){
+  $("#tabs").hidden=true;$("#hdr").hidden=true;setSync("");
+  S.ui.login={mode:"loading",msg};renderLogin();
+  const box=await fetchAccess();S.ui.box=box;
+  S.ui.login={mode:box?"pw":"setup",msg};renderLogin();
+}
+function renderLogin(){
+  $("#tabs").hidden=true;$("#hdr").hidden=true;
+  const L=S.ui.login||{};const m=$("#main");
+  const err=L.msg?`<div class="note bad">${esc(L.msg)}</div>`:"";
+  if(L.mode==="loading"){m.innerHTML=`<div class="empty"><b>Abriendo…</b></div>`;return}
+  if(L.mode==="pw"){m.innerHTML=`<div class="login stack">
+    <h2>Ingresar</h2>${err}
+    <form id="pwForm" class="panel stack">
+      <label class="field"><span>Contraseña</span><input id="pwIn" type="password" autocomplete="current-password" autofocus></label>
+      <label class="row" style="gap:8px"><input type="checkbox" id="pwRemember" checked style="min-height:auto;width:20px;height:20px"><span>Recordar en este dispositivo</span></label>
+      <div class="row"><button class="btn primary" type="submit" id="pwBtn">Entrar</button></div>
+    </form>
+    <p class="small muted">¿Venció el token o querés cambiar la configuración? <button class="link" id="goSetup">Configurar de nuevo</button></p></div>`;
+    setTimeout(()=>$("#pwIn")?.focus(),50);return}
+  const app=L.app||detectAppRepo()||"andrestorena06-spec/conteo-pedido";
+  m.innerHTML=`<div class="login stack">
+    <h2>Configurar acceso</h2>
+    <p class="muted" style="margin:0">Se hace una sola vez. Elegís una contraseña y la app guarda el token cifrado con ella. Después, en la PC o en el celular, solo te pide esa contraseña.</p>${err}
+    <form id="setupForm" class="panel stack">
+      <label class="field"><span>Token de GitHub</span><input id="stToken" type="password" autocomplete="off" placeholder="github_pat_…"></label>
+      <label class="field"><span>Repositorio de datos (privado)</span><input id="stRepo" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(L.repo||"andrestorena06-spec/conteo-pedido-datos")}"></label>
+      <label class="field"><span>Repositorio de la app (público)</span><input id="stApp" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(app)}"></label>
+      <label class="field"><span>Contraseña para entrar</span><input id="stPw" type="password" autocomplete="new-password"></label>
+      <label class="field"><span>Repetir contraseña</span><input id="stPw2" type="password" autocomplete="new-password"></label>
+      <div class="row"><button class="btn primary" type="submit" id="stBtn">Guardar y entrar</button>${S.ui.box?`<button class="btn" type="button" id="goPw">Volver</button>`:""}</div>
+    </form>
+    <details class="panel"><summary>Cómo crear el token</summary>
+      <ol class="small" style="margin-top:10px">
+        <li>En GitHub: Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token.</li>
+        <li>Repository access: <b>Only select repositories</b> y elegí <code>conteo-pedido</code> y <code>conteo-pedido-datos</code>.</li>
+        <li>Permissions → Repository permissions → <b>Contents: Read and write</b>.</li>
+        <li>Expiración: la más larga que te deje (por ejemplo 1 año). Cuando venza, entrás a "Configurar de nuevo" con un token nuevo.</li>
+      </ol></details></div>`;
+}
+const cleanRepo=s=>s.trim().replace(/^https:\/\/github\.com\//,"").replace(/\.git$/,"").replace(/\/$/,"");
+document.addEventListener("submit",async e=>{
+  const id=e.target.id;if(!["pwForm","setupForm","pwChangeForm"].includes(id))return;e.preventDefault();
+  if(id==="pwForm"){const pw=$("#pwIn").value,remember=$("#pwRemember").checked;if(!pw)return;
+    $("#pwBtn").disabled=true;$("#pwBtn").textContent="Verificando…";
+    let creds;try{creds=await unseal(S.ui.box,pw)}catch(_){S.ui.login={mode:"pw",msg:"Contraseña incorrecta."};renderLogin();return}
+    try{await ghRepoCheck(creds.repo,creds.token)}catch(err){S.ui.login={mode:"pw",msg:err.message+" Usá \"Configurar de nuevo\" con un token nuevo."};renderLogin();return}
+    if(remember)lsSet("cyp-gh",creds);else try{sessionStorage.setItem("cyp-gh",JSON.stringify(creds))}catch(_){}
+    startGH(creds);return}
+  if(id==="setupForm"){
+    const token=$("#stToken").value.trim(),repo=cleanRepo($("#stRepo").value),app=cleanRepo($("#stApp").value),pw=$("#stPw").value,pw2=$("#stPw2").value;
+    const fail=msg=>{S.ui.login={mode:"setup",msg,repo,app};renderLogin()};
+    if(!token)return fail("Falta el token.");
+    if(!/^[\w.-]+\/[\w.-]+$/.test(repo)||!/^[\w.-]+\/[\w.-]+$/.test(app))return fail("Escribí los repositorios como usuario/repositorio.");
+    if(pw.length<8)return fail("La contraseña tiene que tener al menos 8 caracteres.");
+    if(pw!==pw2)return fail("Las contraseñas no coinciden.");
+    $("#stBtn").disabled=true;$("#stBtn").textContent="Verificando…";
+    try{await ghRepoCheck(repo,token);await ghRepoCheck(app,token);const creds={repo,token,app};const box=await seal(creds,pw);await writeAccess(app,token,box);S.ui.box=box;
+      lsSet("cyp-gh",creds);startGH(creds);toast("Acceso configurado")}catch(err){fail(err.message)}
+    return}
+  if(id==="pwChangeForm"){const pw=$("#pcNew").value,pw2=$("#pcNew2").value,msg=$("#pcMsg");
+    if(pw.length<8){msg.innerHTML='<span style="color:var(--bad)">Mínimo 8 caracteres.</span>';return}
+    if(pw!==pw2){msg.innerHTML='<span style="color:var(--bad)">No coinciden.</span>';return}
+    const app=GH.creds.app||detectAppRepo();if(!app){msg.innerHTML='<span style="color:var(--bad)">No sé cuál es el repositorio de la app.</span>';return}
+    msg.textContent="Guardando…";
+    try{await writeAccess(app,GH.creds.token,await seal({...GH.creds,app},pw));msg.innerHTML='<span style="color:var(--ok)">Contraseña cambiada. Puede tardar un minuto en valer en otros dispositivos.</span>';$("#pcNew").value="";$("#pcNew2").value=""}
+    catch(err){msg.innerHTML=`<span style="color:var(--bad)">${esc(err.message)}</span>`}}
+});
+
+/* ================= domain ================= */
+const saveCatalog=()=>persist("store/catalog",{items:Object.values(cat()),reportDate:S.catalog?.reportDate||null,source:S.catalog?.source||null},300);
+const saveConfig=()=>persist("store/config",S.config,600);
+const saveGC=()=>persist("store/gc",{days:S.gc},900);
+function isCountDay(k){return S.config.countDays.includes(dow(k))}
+function nextCountDay(k){let d=addDays(k,1);for(let i=0;i<8;i++){if(isCountDay(d))return d;d=addDays(d,1)}return addDays(k,3)}
+function prevCountDay(k){let d=addDays(k,-1);for(let i=0;i<8;i++){if(isCountDay(d))return d;d=addDays(d,-1)}return addDays(k,-3)}
+function subSize(w){return S.config.subSize?.[w]||0}
+function entryTotal(w,e){if(!e)return null;const it=item(w);const[c,s,u]=e;if(c==null&&s==null&&u==null)return null;return (c||0)*(it?.cc||0)+(s||0)*subSize(w)+(u||0)}
+function stockAt(date,w){const c=S.counts[date];if(!c)return null;const t=entryTotal(w,c.items?.[w]);return t==null?0:t}
+function orderUnits(o,w){const q=o?.items?.[w];if(!q)return 0;return q*(item(w)?.cc||0)}
+function allMovs(){return Object.values(S.movs).flatMap(m=>m.items||[])}
+function inWin(dd,a,b){return S.config.countBeforeDelivery?(dd>=a&&dd<b):(dd>a&&dd<=b)}
+function inflowBetween(a,b,w){let s=0;for(const[k,o]of Object.entries(S.orders)){if(inWin(o.deliveryDate||k,a,b))s+=orderUnits(o,w)}
+  for(const m of allMovs())if(m.w===w&&inWin(m.date,a,b))s+=m.units;return s}
+function countDates(){return Object.keys(S.counts).filter(k=>Object.keys(S.counts[k]?.items||{}).length).sort()}
+function usageBetween(a,b,w){const sa=stockAt(a,w),sb=stockAt(b,w);if(sa==null||sb==null)return null;return sa+inflowBetween(a,b,w)-sb}
+function gcSum(from,to,f){let s=0,miss=[];for(let d=from;d<=to;d=addDays(d,1)){const v=S.gc[d]?.[f];if(v==null||v==="")miss.push(d);else s+=Number(v)}return{sum:s,miss}}
+function realUsoMil(a,b,w){const u=usageBetween(a,b,w);if(u==null)return null;const g=gcSum(addDays(a,1),b,"r");if(g.miss.length||!g.sum)return null;return u/g.sum*1000}
+function baseUso(w,realAvg){const it=item(w);if(!it)return{v:null,src:"—"};const b=S.config.usoBase;
+  if(b==="real"){if(realAvg!=null)return{v:realAvg,src:"real"};return{v:it.us,src:"sem"}}
+  return{v:it[b],src:{ud:"día",us:"sem",um_:"mes"}[b]}}
+function countList(){return S.config.countOrder.filter(w=>item(w))}
+function pedidoList(){const p=(S.config.pedidoOrder||[]).filter(w=>item(w));const set=new Set(p);return[...p,...countList().filter(w=>!set.has(w))]}
+
+function computePedido(D){
+  const D1=nextCountDay(D),D2=nextCountDay(D1);
+  const dates=countDates().filter(k=>k<D);
+  const p1=dates[dates.length-1]||null,p2=dates[dates.length-2]||null;
+  const cbd=S.config.countBeforeDelivery;
+  const arrivingOrder=cbd?Object.values(S.orders).find(o=>o.deliveryDate===D):null;
+  const todayMovs=cbd?allMovs().filter(m=>m.date===D):[];
+  const g1=gcSum(addDays(D,1),D1,"p"),g2=gcSum(addDays(D1,1),D2,"p"),gAll=gcSum(addDays(D,1),D2,"p");
+  const safety=1+(Number(S.config.safety)||0)/100;
+  const list=S.config.showAllInPedido?Object.keys(cat()).sort((a,b)=>item(a).d.localeCompare(item(b).d)):pedidoList();
+  const extra=[...new Set([...(arrivingOrder?Object.keys(arrivingOrder.items):[]),...todayMovs.map(m=>m.w)])].filter(w=>!list.includes(w)&&item(w));
+  const rows=[...list,...extra].map(w=>{
+    const it=item(w);const cc=it.cc||1;
+    const stock=stockAt(D,w);
+    const arriving=(arrivingOrder?orderUnits(arrivingOrder,w):0)+todayMovs.filter(m=>m.w===w).reduce((a,m)=>a+m.units,0);
+    const u1=p1?usageBetween(p1,D,w):null,u2=p2?usageBetween(p2,D,w):null;
+    let realAvg=null;if(p2&&u2!=null){const g=gcSum(addDays(p2,1),D,"r");if(!g.miss.length&&g.sum)realAvg=u2/g.sum*1000}if(realAvg==null&&p1)realAvg=realUsoMil(p1,D,w);
+    const uso=baseUso(w,realAvg);
+    const need1=uso.v!=null?g1.sum/1000*uso.v*safety:null,need=uso.v!=null?gAll.sum/1000*uso.v*safety:null;
+    const avail=(stock||0)+arriving,falta=need!=null?need-avail:null;
+    const sug=falta!=null&&falta>0?Math.ceil(falta/cc-1e-9):0;
+    return{w,it,cc,stock,arriving,u1,u2,realAvg,uso,need1,need,avail,sug,risk:need1!=null&&need1>0&&avail<need1};
+  });
+  return{D,D1,D2,p1,p2,arrivingOrder,todayMovs,g1,g2,gAll,rows};
+}
+
+/* ================= parsers ================= */
+function parseJBO(text){
+  const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const items={},unknown=[],bad=[],descs={};let dd=null,od=null,trailer=null,ctrl=null;
+  for(const l of lines){
+    const m=l.match(/^JBO\s+(\d{6})\s+(\d{8})\s+(.+?)\s+(\d{1,6})\s+(\d{6})\s*(.*)$/);
+    if(!m){bad.push(l);continue}
+    dd=dd||m[1];od=od||m[5];trailer=trailer||m[6]||null;
+    if(m[2]==="88888888"){ctrl=Number(m[4]);continue}
+    const w=Number(m[2].slice(0,5))+"/"+Number(m[2].slice(5));
+    items[w]=(items[w]||0)+Number(m[4]);descs[w]=m[3].trim();if(!item(w))unknown.push(w);
+  }
+  const k=s=>s?"20"+s.slice(0,2)+"-"+s.slice(2,4)+"-"+s.slice(4,6):null;
+  return{deliveryDate:k(dd),orderDate:k(od),trailer,items,descs,unknown,bad,ctrl,total:Object.values(items).reduce((a,b)=>a+b,0)};
+}
+const USO_RX=/^(\d+)\s*\/\s*(\d+)\s+(.+?)\s+(KG|UNI|LT)\s+(-?[\d.,]+)\s+(-?[\d.,]+)\s+(-?[\d.,]+)\s+(-?[\d.,]+)\s+(-?[\d.,]+)$/;
+function parseUsoLines(lines){
+  const out={};let date=null;
+  for(let l of lines){l=l.replace(/\s+/g," ").trim();
+    const fd=l.match(/Fecha de negocio\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i);if(fd)date=`${fd[3]}-${fd[2]}-${fd[1]}`;
+    const m=l.match(USO_RX);if(!m)continue;const w=Number(m[1])+"/"+Number(m[2]);
+    out[w]={w,d:m[3].trim(),um:m[4],p:esNum(m[5]),cc:esNum(m[6]),ud:esNum(m[7]),us:esNum(m[8]),um_:esNum(m[9])};
+  }
+  return{items:out,date};
+}
+async function pdfToLines(file){
+  const lib=window.pdfjsLib;if(!lib)throw new Error("no se pudo cargar el lector de PDF");
+  const doc=await lib.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false}).promise;const lines=[];
+  for(let p=1;p<=doc.numPages;p++){const tc=await(await doc.getPage(p)).getTextContent();const rows=new Map();
+    for(const it of tc.items){if(!it.str||!it.str.trim())continue;const y=Math.round(it.transform[5]/2)*2;if(!rows.has(y))rows.set(y,[]);rows.get(y).push(it)}
+    [...rows.entries()].sort((a,b)=>b[0]-a[0]).forEach(([,its])=>{its.sort((a,b)=>a.transform[4]-b.transform[4]);lines.push(its.map(i=>i.str.trim()).join(" "))})}
+  return lines;
+}
+function applyUso(parsed,srcName){
+  if(!S.catalog)S.catalog={items:{}};let upd=0,nw=0;
+  for(const[w,u]of Object.entries(parsed.items)){const cur=S.catalog.items[w];
+    if(cur){Object.assign(cur,{d:u.d,um:u.um,p:u.p,cc:u.cc,ud:u.ud,us:u.us,um_:u.um_});upd++}else{S.catalog.items[w]=u;nw++}}
+  S.catalog.reportDate=parsed.date||S.catalog.reportDate;S.catalog.source=srcName;saveCatalog();return{upd,nw};
+}
+function resolveWrin(w,desc){
+  if(item(w))return w;if(REMAP[w]&&item(REMAP[w]))return REMAP[w];
+  const base=w.split("/")[0],d=String(desc||"").trim().toUpperCase().slice(0,6);
+  const hit=Object.keys(cat()).filter(x=>x.split("/")[0]===base&&(!d||item(x).d.toUpperCase().startsWith(d)));
+  return hit.length===1?hit[0]:null;
+}
+const normH=s=>String(s??"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z/]/g,"");
+async function parseListFile(file){
+  if(/\.pdf$/i.test(file.name)||file.type==="application/pdf"){const p=parseUsoLines(await pdfToLines(file));if(!Object.keys(p.items).length)throw new Error("no encontré productos en el PDF");
+    return{kind:"pdf",uso:p,list:Object.keys(p.items),descs:Object.fromEntries(Object.entries(p.items).map(([w,i])=>[w,i.d])),fileName:file.name}}
+  if(!window.XLSX)throw new Error("no se pudo cargar el lector de Excel");
+  const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:"array"});
+  const sheetName=wb.SheetNames.find(n=>normH(n)==="pedido")||wb.SheetNames[0];
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,raw:true,defval:null});
+  const hi=rows.findIndex(r=>r&&r.some(c=>normH(c)==="wrin"));if(hi<0)throw new Error("no encontré la columna Wrin en la hoja "+sheetName);
+  const H=rows[hi].map(normH),cW=H.indexOf("wrin"),cD=H.findIndex(h=>h.startsWith("descrip")),cU=H.indexOf("um"),cC=H.findIndex(h=>h.startsWith("cant"));
+  const list=[],descs={},extra={};
+  for(const r of rows.slice(hi+1)){if(!r)continue;const raw=normWrin(r[cW]);if(!raw)continue;const d=cD>=0?String(r[cD]??"").trim():"";
+    const w=resolveWrin(raw,d)||raw;if(list.includes(w))continue;list.push(w);descs[w]=d;
+    if(!item(w)){let cc=parseNum(r[cC]);if(typeof r[cC]==="number"&&cc>=1000&&cc%1000===0)cc=cc/1000;extra[w]={w,d:d||w,um:cU>=0?String(r[cU]||"UNI"):"UNI",cc:cc||1,ud:null,us:null,um_:null}}}
+  if(!list.length)throw new Error("la hoja "+sheetName+" no tiene productos");
+  return{kind:"xlsx",sheetName,list,descs,extra,fileName:file.name};
+}
+function listDiff(L){const cur=new Set((S.config.pedidoOrder||[]).filter(w=>item(w))),nw=new Set(L.list);return{add:L.list.filter(w=>!cur.has(w)),rem:[...cur].filter(w=>!nw.has(w))}}
+async function parseCountExcel(file){
+  if(!window.XLSX)throw new Error("no se pudo cargar el lector de Excel");
+  const wb=XLSX.read(new Uint8Array(await file.arrayBuffer()),{type:"array"});
+  const sheetName=wb.SheetNames.find(n=>normH(n)==="conteo")||wb.SheetNames[0];
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,raw:true,defval:null});
+  const hi=rows.findIndex(r=>r&&r.some(c=>normH(c)==="wrin"));if(hi<0)throw new Error("no encontré la columna Wrin en la hoja "+sheetName);
+  const H=rows[hi].map(normH);const col=n=>H.indexOf(n);
+  const cW=col("wrin"),cD=H.findIndex(h=>h.startsWith("descrip")),cC=col("caja"),cS=col("subunidad"),cU=col("unidad"),cT=col("total");
+  const items={},unknown=[];let empty=0;
+  for(const r of rows.slice(hi+1)){if(!r)continue;const raw=normWrin(r[cW]);if(!raw)continue;
+    let c=cC>=0?parseNum(r[cC]):null,s=cS>=0?parseNum(r[cS]):null,u=cU>=0?parseNum(r[cU]):null;const t=cT>=0?parseNum(r[cT]):null;
+    if(c==null&&s==null&&u==null&&t!=null)u=t;
+    if(c==null&&s==null&&u==null){empty++;continue}
+    const w=resolveWrin(raw,cD>=0?r[cD]:"");
+    if(!w){unknown.push(raw+(cD>=0&&r[cD]?" "+String(r[cD]).trim():""));continue}
+    items[w]=[c,s,u];
+  }
+  return{sheetName,items,unknown,empty,fileName:file.name};
+}
+
+/* ================= render ================= */
+function loadingHTML(){return`<div class="empty"><b>Cargando…</b>Leyendo conteos, órdenes y proyección guardados.</div>`}
+function render(){
+  if(S.ui.login){renderLogin();return}
+  $("#tabs").hidden=false;
+  document.querySelectorAll("#tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===S.ui.tab));
+  const m=$("#main");if(!S.ready){m.innerHTML=loadingHTML();return}
+  const fn={pedido:renderPedido,conteo:renderConteo,ordenes:renderOrdenes,gc:renderGC,ajustes:renderAjustes}[S.ui.tab];
+  const sx=window.scrollX,sy=window.scrollY,frames=[...m.querySelectorAll(".tframe")].map(f=>f.scrollLeft);
+  const det=[...m.querySelectorAll("details[id]")].filter(d=>d.open).map(d=>d.id);
+  m.innerHTML=fn();
+  det.forEach(id=>{const d=document.getElementById(id);if(d)d.open=true});
+  m.querySelectorAll(".tframe").forEach((f,i)=>{if(frames[i])f.scrollLeft=frames[i]});
+  window.scrollTo(sx,sy);
+  if(S.ui.tab==="conteo"&&S.ui.sorting)wireDrag();
+}
+let rTimer=null;
+function softRender(){clearTimeout(rTimer);rTimer=setTimeout(()=>{const a=document.activeElement;
+  if(a&&$("#main").contains(a)&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;render()},80)}
+function noCatalog(){return`<div class="panel empty"><b>Falta el catálogo de productos</b>Cargá el reporte de uso cada mil (PDF) en <button class="link" data-go="ajustes">Catálogo y ajustes</button>.</div>`}
+
+/* ---- Pedido ---- */
+function renderPedido(){
+  if(!S.catalog)return noCatalog();
+  const t=todayKey();const D=S.ui.pedDate||(S.ui.pedDate=isCountDay(t)?t:(countDates().slice(-1)[0]||t));
+  const P=computePedido(D),unit=S.ui.pedUnit;
+  const saved=Object.values(S.orders).find(o=>o.deliveryDate===P.D1);
+  const draft=S.ui.pedDraft[P.D1]||(S.ui.pedDraft[P.D1]={});
+  const qty=r=>draft[r.w]!=null?draft[r.w]:(saved?(saved.items[r.w]||0):r.sug);
+  const cell=(v,r,cls="")=>{if(v==null)return`<td class="n dim">—</td>`;const val=unit==="cajas"?v/r.cc:v;return`<td class="n ${val<-0.05?"neg":""} ${cls}">${fmt(val)}</td>`};
+  let rows=P.rows;const q=S.ui.pedSearch.trim().toLowerCase();
+  if(q)rows=rows.filter(r=>r.it.d.toLowerCase().includes(q)||r.w.includes(q));
+  if(S.ui.pedFilter==="pedir")rows=rows.filter(r=>qty(r)>0);
+  if(S.ui.pedFilter==="riesgo")rows=rows.filter(r=>r.risk);
+  const options=[...new Set([...countDates(),isCountDay(t)?t:null,nextCountDay(t),D].filter(Boolean))].sort().reverse();
+  const cdoc=S.counts[D];
+  const totCajas=P.rows.reduce((a,r)=>a+(Number(qty(r))||0),0),nRisk=P.rows.filter(r=>r.risk).length;
+  const warn=[];
+  if(!cdoc)warn.push(`No hay conteo del ${fmtD(D)}. El stock se toma como 0 hasta que lo cargues en <button class="link" data-go="conteo" data-date="${D}">Conteo</button>.`);
+  else if(cdoc.status!=="guardado")warn.push(`El conteo del ${fmtD(D)} está en borrador. <button class="link" data-go="conteo" data-date="${D}">Revisalo y guardalo</button>.`);
+  if(P.gAll.miss.length)warn.push(`Faltan GC proyectados para ${P.gAll.miss.map(d=>fmtD(d)).join(", ")}. Esos días cuentan como 0. Cargalos en <button class="link" data-go="gc">GC por día</button>.`);
+  if(S.config.countBeforeDelivery&&!P.arrivingOrder)warn.push(`No hay orden cargada que llegue el ${fmtD(D)}. Si hubo descarga ese día, cargala en <button class="link" data-go="ordenes">Órdenes</button>.`);
+  const usoLbl={ud:"diario",us:"semanal",um_:"mensual",real:"real (de tus conteos)"}[S.config.usoBase];
+  return`<div class="stack">
+  <div class="row"><h2>Pedido del ${fmtD(D,true)}</h2><span class="spacer"></span>
+    <label class="small muted" for="pedDate">Fecha de conteo</label>
+    <select id="pedDate">${options.map(k=>`<option value="${k}" ${k===D?"selected":""}>${fmtD(k)}${S.counts[k]?(S.counts[k].status==="guardado"?"":" (borrador)"):" (sin conteo)"}</option>`).join("")}</select></div>
+  <div class="facts">
+    <div><div class="k">Llega</div><div class="v">${fmtD(P.D1,true)}</div></div>
+    <div><div class="k">Cubre 2 ciclos</div><div class="v">${fmtD(addDays(D,1))} → ${fmtD(P.D2)}</div></div>
+    <div><div class="k">GC proyectados</div><div class="v"><span class="num">${fmt(P.gAll.sum,0)}</span></div><div class="small muted">${fmt(P.g1.sum,0)} + ${fmt(P.g2.sum,0)}</div></div>
+    <div><div class="k">Entra hoy</div><div class="v">${P.arrivingOrder?`Orden del ${fmtD(P.arrivingOrder.orderDate)}`:`<span class="muted">Sin orden</span>`}</div>${P.todayMovs.length?`<div class="small muted">+ ${P.todayMovs.length} movimiento${P.todayMovs.length>1?"s":""}</div>`:""}</div>
+    <div><div class="k">Uso cada mil</div><div class="v">${usoLbl}${S.config.safety?` <span class="small muted">+${S.config.safety}%</span>`:""}</div></div>
+    <div><div class="k">Total a pedir</div><div class="v"><span class="num">${fmt(totCajas,0)}</span> cajas</div><div class="small">${nRisk?`<span class="chip bad">${nRisk} no llegan</span>`:'<span class="muted">Sin quiebres previstos</span>'}</div></div>
+  </div>
+  ${warn.map(w=>`<div class="note">${w}</div>`).join("")}
+  <div class="row">
+    <input type="search" id="pedSearch" placeholder="Buscar producto o WRIN" value="${esc(S.ui.pedSearch)}">
+    <div class="seg" role="group" aria-label="Mostrar">${[["all","Todos"],["pedir","A pedir"],["riesgo","En riesgo"]].map(([k,l])=>`<button data-pedfilter="${k}" aria-pressed="${S.ui.pedFilter===k}">${l}</button>`).join("")}</div>
+    <div class="seg" role="group" aria-label="Unidades">${[["cajas","Cajas"],["un","Unidades"]].map(([k,l])=>`<button data-pedunit="${k}" aria-pressed="${unit===k}">${l}</button>`).join("")}</div>
+  </div>
+  <div class="tframe"><table>
+    <thead><tr><th class="stick">Producto</th><th>UM</th><th class="n">Stock ${fmtD(D)}</th><th class="n">Entra ${fmtD(D)}</th>
+      <th class="n" title="${P.p1?`${fmtD(P.p1)} → ${fmtD(D)}`:""}">Uso últ. ciclo</th><th class="n" title="${P.p2?`${fmtD(P.p2)} → ${fmtD(D)}`:""}">Uso 2 ciclos</th>
+      <th class="n">Uso/mil</th><th class="n">Necesidad</th><th class="n">Sugerido</th><th class="n order">Pedir (cj)</th></tr></thead>
+    <tbody>${rows.length?rows.map(r=>`<tr>
+      <td class="stick prod"><b>${esc(r.it.d)}</b> ${r.risk?`<span class="chip bad" title="Stock + lo que entra hoy no cubre el próximo ciclo">no llega</span>`:""}<div class="w">${r.w} · ${fmt(r.cc,2)} ${r.it.um}/cj</div></td>
+      <td class="dim">${unit==="cajas"?"cj":r.it.um}</td>
+      ${cell(r.stock??0,r)}${cell(r.arriving||0,r,r.arriving?"":"dim")}${cell(r.u1,r)}${cell(r.u2,r)}
+      <td class="n">${r.uso.v==null?'<span class="dim">—</span>':fmt(r.uso.v,2)}<div class="w">${r.uso.src}${r.realAvg!=null&&S.config.usoBase!=="real"?` · real ${fmt(r.realAvg,2)}`:""}</div></td>
+      ${cell(r.need,r)}<td class="n">${r.sug}</td>
+      <td class="n order"><input class="n" inputmode="numeric" data-ped="${r.w}" value="${qty(r)}" aria-label="Cajas a pedir de ${esc(r.it.d)}"></td>
+    </tr>`).join(""):`<tr><td colspan="10" class="empty">Ningún producto coincide con el filtro.</td></tr>`}</tbody>
+  </table></div>
+  <div class="row">
+    <button class="btn primary" id="savePed">Guardar como orden para el ${fmtD(P.D1)}</button>
+    <button class="btn" id="copyPed">Copiar en formato JBO</button>
+    <button class="btn" id="resetPed">Volver a lo sugerido</button>
+    <span class="small muted">${saved?`Ya hay una orden que llega el ${fmtD(P.D1)} (${saved.source==="app"?"armada acá":"importada"}); la columna Pedir muestra esa orden.`:""}</span>
+  </div>
+  <textarea id="jboOut" hidden readonly aria-label="Orden en formato JBO"></textarea>
+  <p class="small muted">Necesidad = GC proyectados de los 2 ciclos ÷ 1000 × uso cada mil${S.config.safety?` × ${1+S.config.safety/100}`:""}. Sugerido = necesidad − stock contado − lo que entra ese día (orden anterior y movimientos), redondeado a cajas hacia arriba. "No llega" marca los productos donde stock + lo que entra no alcanza para el primer ciclo.</p>
+  </div>`;
+}
+function buildJBO(P,qty){
+  const dd=yymmdd(P.D1),od=yymmdd(P.D),tr=S.config.trailer||"2058 ANT";const lines=[];let tot=0;
+  for(const r of P.rows){const q=Number(qty(r))||0;if(q<=0)continue;tot+=q;
+    lines.push(`JBO ${dd} ${wrin8(r.w)} ${(r.it.d||"").toUpperCase().slice(0,13).padEnd(26," ")}${String(q).padStart(6,"0")} ${od} ${tr}`)}
+  lines.push(`JBO ${dd} 88888888 REGISTRO FINAL DE CONTROL ${String(tot).padStart(6,"0")} ${od} ${tr}`);return lines.join("\n");
+}
+
+/* ---- Conteo ---- */
+function defaultCountDate(){const t=todayKey();return isCountDay(t)?t:nextCountDay(t)}
+function countLocked(D){return S.counts[D]?.status==="guardado"&&!S.ui.editing[D]}
+function renderConteo(){
+  if(!S.catalog)return noCatalog();
+  const D=S.ui.countDate||(S.ui.countDate=defaultCountDate());
+  const doc=S.counts[D],locked=countLocked(D);
+  let list=countList();const total=list.length;
+  const done=list.filter(w=>entryTotal(w,doc?.items?.[w])!=null).length;
+  const sort=S.ui.countSort;
+  if(!S.ui.sorting){
+    if(sort==="az")list=[...list].sort((a,b)=>item(a).d.localeCompare(item(b).d));
+    if(sort==="wrin")list=[...list].sort((a,b)=>{const[a1,a2]=a.split("/").map(Number),[b1,b2]=b.split("/").map(Number);return a1-b1||a2-b2});
+    if(sort==="um")list=[...list].sort((a,b)=>item(a).um.localeCompare(item(b).um));
+    const q=S.ui.countSearch.trim().toLowerCase();if(q)list=list.filter(w=>item(w).d.toLowerCase().includes(q)||w.includes(q));
+    if(S.ui.countFilter==="pend")list=list.filter(w=>entryTotal(w,doc?.items?.[w])==null);
+  }
+  const hist=Object.keys(S.counts).sort().reverse();
+  const X=S.ui.xls;
+  const status=doc?(doc.status==="guardado"?`<span class="chip ok">Guardado ${fmtTS(doc.savedAt)}</span>`:`<span class="chip warn">Borrador</span>`):`<span class="chip neu">Sin empezar</span>`;
+  const header=`<div class="row"><h2>Conteo del ${fmtD(D,true)}</h2>${status}<span class="spacer"></span>
+    <label class="small muted" for="countDate">Fecha</label><input type="date" id="countDate" value="${D}"></div>
+    ${!isCountDay(D)?`<div class="note">El ${fmtD(D,true)} no es día de conteo (${S.config.countDays.map(d=>DOWL[d].toLowerCase()).join(" y ")}).</div>`:""}
+    <details class="panel" id="histBox"><summary>Conteos anteriores (${hist.length})</summary>
+      ${hist.length?`<div class="tframe" style="margin-top:10px"><table><thead><tr><th>Fecha</th><th>Estado</th><th class="n">Productos</th><th>Último cambio</th><th></th></tr></thead><tbody>
+      ${hist.map(k=>{const c=S.counts[k];const n=Object.keys(c.items||{}).length;return`<tr><td><b>${fmtD(k)}</b></td><td>${c.status==="guardado"?'<span class="chip ok">Guardado</span>':'<span class="chip warn">Borrador</span>'}</td><td class="n">${n}</td><td class="small muted">${fmtTS(c.savedAt||c.updatedAt)}${c.source?" · "+esc(c.source):""}</td>
+        <td class="n">${S.ui.confirm==="c:"+k?`<button class="btn danger" data-delcount="${k}">Borrar</button> <button class="link" data-cancelconf>no</button>`:`<button class="link" data-cdate="${k}">abrir</button> · <button class="link" data-askdel="c:${k}">borrar</button>`}</td></tr>`}).join("")}
+      </tbody></table></div>`:`<p class="muted small">Todavía no hay conteos.</p>`}
+    </details>
+    <details class="panel" id="xlsBox" ${X?"open":""}><summary>Importar conteo desde Excel</summary>
+      <div class="stack" style="margin-top:10px">
+      <p class="small muted" style="margin:0">Usá tu planilla con las columnas Wrin, Caja, Subunidad, Unidad (o solo Total). Se carga como borrador en la fecha que elijas para que lo revises antes de guardar.</p>
+      <div class="row"><label class="btn" for="xlsFile">Elegir archivo .xlsx</label><input type="file" id="xlsFile" accept=".xlsx,.xls,.xlsm,.csv" hidden>${X?.fileName?`<span class="small muted">${esc(X.fileName)}</span>`:""}</div>
+      ${X?.error?`<div class="note bad">${esc(X.error)}</div>`:""}
+      ${X?.items?`<div class="note info">Hoja "${esc(X.sheetName)}": ${Object.keys(X.items).length} productos con valores, ${X.empty} vacíos${X.unknown.length?`, ${X.unknown.length} que no reconozco (se ignoran): ${esc(X.unknown.join(", "))}`:""}.</div>
+        <div class="row"><label class="small" for="xlsDate">Cargar en el conteo del</label><input type="date" id="xlsDate" value="${X.date||D}">
+          <button class="btn primary" id="xlsApply" ${Object.keys(X.items).length?"":"disabled"}>Cargar</button><button class="btn" id="xlsCancel">Cancelar</button></div>
+        ${S.counts[X.date||D]&&Object.keys(S.counts[X.date||D].items||{}).length?`<div class="note">Ya hay un conteo el ${fmtD(X.date||D)}: los productos del Excel reemplazan sus valores y el resto queda como está.</div>`:""}`:""}
+      </div></details>`;
+  if(S.ui.sorting){
+    return`<div class="stack">${header}
+    <div class="note info">Arrastrá desde ⠿ o usá las flechas. Este orden se usa en todos los conteos y en Pedido. ✕ saca el producto de la lista; lo podés volver a agregar desde Catálogo.</div>
+    <div class="row"><button class="btn primary" id="endSort">Listo</button></div>
+    <div class="clist" id="sortList">${list.map((w,i)=>`<div class="crow sorting" data-w="${w}"><div class="handle" aria-hidden="true">⠿</div>
+      <div class="pname"><b>${esc(item(w).d)}</b><span class="w">${w} · ${item(w).um}</span></div>
+      <div class="row" style="gap:4px;flex-wrap:nowrap"><button class="mini" data-mv="-1" data-w="${w}" aria-label="Subir" ${i===0?"disabled":""}>↑</button><button class="mini" data-mv="1" data-w="${w}" aria-label="Bajar" ${i===list.length-1?"disabled":""}>↓</button><button class="mini" data-hide="${w}" aria-label="Quitar de la lista">✕</button></div></div>`).join("")}</div></div>`;
+  }
+  return`<div class="stack">${header}
+  ${locked?`<div class="note info">Este conteo está guardado y no se puede modificar sin querer. <button class="link" id="editCount">Editar</button></div>`:""}
+  <div class="row">
+    <input type="search" id="countSearch" placeholder="Buscar producto o WRIN" value="${esc(S.ui.countSearch)}">
+    <div class="seg" role="group" aria-label="Mostrar">${[["all","Todos"],["pend","Sin contar"]].map(([k,l])=>`<button data-cfilter="${k}" aria-pressed="${S.ui.countFilter===k}">${l}</button>`).join("")}</div>
+    <div class="seg" role="group" aria-label="Ordenar">${[["mine","Mi orden"],["az","A–Z"],["wrin","WRIN"],["um","UM"]].map(([k,l])=>`<button data-csort="${k}" aria-pressed="${sort===k}">${l}</button>`).join("")}</div>
+    <button class="btn" id="startSort">Reordenar lista</button>
+  </div>
+  <div>
+  <div class="clist" style="border-radius:6px 6px 0 0">
+    <div class="crow head"><div>Producto</div><div style="text-align:right">Caja</div><div style="text-align:right">Subunidad</div><div style="text-align:right">Unidad</div><div style="text-align:right">Total</div></div>
+    ${list.length?list.map(w=>{const it=item(w),e=doc?.items?.[w]||[],t=entryTotal(w,e),ss=subSize(w),dis=locked?"disabled":"";
+      return`<div class="crow ${t!=null?"done":""}" data-w="${w}">
+      <div class="pname"><b>${esc(it.d)}</b><span class="w">${w} · ${fmt(it.cc,2)} ${it.um}/cj${ss?` · ${fmt(ss,2)}/sub`:""}</span></div>
+      <label><span class="lbl">Caja</span><input class="n" inputmode="decimal" data-c="0" data-w="${w}" value="${e[0]??""}" ${dis} aria-label="Cajas de ${esc(it.d)}"></label>
+      <label><span class="lbl">Subunidad</span><input class="n" inputmode="decimal" data-c="1" data-w="${w}" value="${e[1]??""}" ${dis} aria-label="Subunidades de ${esc(it.d)}"></label>
+      <label><span class="lbl">Unidad (${it.um})</span><input class="n" inputmode="decimal" data-c="2" data-w="${w}" value="${e[2]??""}" ${dis} aria-label="Unidades sueltas de ${esc(it.d)}"></label>
+      <div class="tot" data-tot="${w}">${totHTML(w,t,D)}</div></div>`}).join(""):`<div class="empty"><b>Nada para mostrar</b>${S.ui.countFilter==="pend"?"Ya contaste todo lo de la lista.":"Ningún producto coincide con la búsqueda."}</div>`}
+  </div>
+  <div class="savebar"><span class="chip ${done===total?"ok":"neu"}" id="doneChip">${done} de ${total} contados</span><span class="spacer"></span>
+    ${locked?`<button class="btn" id="editCount2">Editar conteo</button>`:`<button class="btn primary" id="saveCount">Guardar conteo del ${fmtD(D)}</button>`}</div>
+  </div>
+  <p class="small muted">Total = cajas × cantidad por caja + subunidades × unidades por subunidad + unidades sueltas, en la unidad del producto. Mientras cargás se guarda como borrador; "Guardar conteo" lo cierra para esa fecha.</p>
+  </div>`;
+}
+function totHTML(w,t,D){const it=item(w);if(t==null)return`<span class="dim">—</span>`;
+  const warnSub=(S.counts[D]?.items?.[w]?.[1])&&!subSize(w);
+  return`<span class="num">${fmt(t,2)}</span> <span class="small muted">${it.um} · ${fmt(t/(it.cc||1),2)} cj</span>${warnSub?`<div class="small" style="color:var(--warn)">Definí U/subunidad en Catálogo</div>`:""}`}
+
+/* ---- Órdenes y movimientos ---- */
+function renderOrdenes(){
+  const list=Object.values(S.orders).sort((a,b)=>(b.deliveryDate||"").localeCompare(a.deliveryDate||""));
+  const P=S.ui.ordPreview,conf=S.ui.confirm;
+  const movs=allMovs().sort((a,b)=>b.date.localeCompare(a.date)||(b.ts||"").localeCompare(a.ts||""));
+  const M=S.ui.mov||(S.ui.mov={date:todayKey(),prod:"",cajas:"",unid:"",nota:""});
+  return`<div class="stack">
+  <h2>Órdenes y movimientos</h2>
+  <div class="grid2">
+  <div class="panel stack">
+    <h3>Cargar orden de compra</h3>
+    <div class="row"><label class="btn primary" for="jboFile">Elegir archivo .JBO / .txt</label><input type="file" id="jboFile" hidden><span class="small muted">o pegá el contenido abajo</span></div>
+    <textarea id="jboText" placeholder="JBO 261022 00004900 PAPAS CONG MC             000072 261019 2058 ANT">${esc(S.ui.ordText||"")}</textarea>
+    <div class="row"><button class="btn" id="jboParse">Revisar</button></div>
+    ${P?(Object.keys(P.items).length?`<div class="stack"><div class="facts">
+        <div><div class="k">Fecha de orden</div><div class="v">${fmtD(P.orderDate)}</div></div>
+        <div><div class="k">Llega</div><div class="v">${fmtD(P.deliveryDate)}</div></div>
+        <div><div class="k">Renglones</div><div class="v num">${Object.keys(P.items).length}</div></div>
+        <div><div class="k">Cajas</div><div class="v"><span class="num">${P.total}</span> ${P.ctrl!=null?(P.ctrl===P.total?'<span class="chip ok">coincide con control</span>':`<span class="chip bad">control dice ${P.ctrl}</span>`):""}</div></div></div>
+      ${P.unknown.length?`<div class="note">${P.unknown.length} productos no están en el catálogo y se agregan sin uso cada mil: ${P.unknown.map(w=>esc(P.descs[w])+" ("+w+")").join(", ")}.</div>`:""}
+      ${P.bad.length?`<div class="note">${P.bad.length} líneas no se entendieron y se ignoran.</div>`:""}
+      ${S.orders[P.deliveryDate]?`<div class="note">Ya hay una orden que llega el ${fmtD(P.deliveryDate)}. Guardar la reemplaza.</div>`:""}
+      <div class="row"><button class="btn primary" id="jboSave">Guardar orden</button><button class="btn" id="jboCancel">Cancelar</button></div></div>`
+      :`<div class="note bad">No encontré renglones con formato JBO. Cada línea debería verse así: JBO 261022 00004900 PAPAS CONG MC 000072 261019 2058 ANT</div>`):""}
+  </div>
+  <div class="panel stack">
+    <h3>Movimiento fuera del pedido</h3>
+    <p class="small muted" style="margin:0">Una caja que vino de más, una transferencia que llegó o que se fue a otro local. Cuenta para el uso del ciclo y, si es del día del pedido, como stock que entra o sale.</p>
+    <form id="movForm" class="stack" style="gap:10px">
+      <div class="seg" role="group" aria-label="Tipo">${[["entra","Entra"],["sale","Sale"]].map(([k,l])=>`<button type="button" data-movtipo="${k}" aria-pressed="${S.ui.movTipo===k}">${l}</button>`).join("")}</div>
+      <label class="field"><span>Producto</span><input id="movProd" list="prodList" autocomplete="off" placeholder="Escribí para buscar" value="${esc(M.prod)}"></label>
+      <datalist id="prodList">${Object.values(cat()).sort((a,b)=>a.d.localeCompare(b.d)).map(i=>`<option value="${esc(i.d)} · ${i.w}"></option>`).join("")}</datalist>
+      <div class="kv">
+        <label class="field"><span>Fecha</span><input type="date" id="movDate" value="${M.date}"></label>
+        <label class="field"><span>Cajas</span><input id="movCajas" class="n" inputmode="decimal" value="${esc(M.cajas)}"></label>
+        <label class="field"><span>Unidades sueltas</span><input id="movUnid" class="n" inputmode="decimal" value="${esc(M.unid)}"></label>
+      </div>
+      <label class="field"><span>Nota</span><input id="movNota" placeholder="Ej.: transferencia a otro local" value="${esc(M.nota)}"></label>
+      <div class="row"><button class="btn primary" type="submit">Agregar movimiento</button><span class="small" id="movMsg"></span></div>
+    </form>
+  </div></div>
+  <div class="panel stack">
+    <h3>Movimientos</h3>
+    ${movs.length?`<div class="tframe"><table><thead><tr><th>Fecha</th><th>Producto</th><th class="n">Cantidad</th><th>Nota</th><th></th></tr></thead><tbody>
+      ${movs.slice(0,60).map(m=>{const it=item(m.w);return`<tr><td><b>${fmtD(m.date)}</b></td><td>${esc(it?.d||m.w)} <span class="w">${m.w}</span></td>
+        <td class="n ${m.units<0?"neg":""}">${m.units>0?"+":""}${fmt(m.units/(it?.cc||1),2)} cj <span class="small muted">(${m.units>0?"+":""}${fmt(m.units,2)} ${it?.um||""})</span></td><td class="small">${esc(m.nota||"")}</td>
+        <td class="n">${conf==="m:"+m.id?`<button class="btn danger" data-delmov="${m.id}">Borrar</button> <button class="link" data-cancelconf>no</button>`:`<button class="link" data-askdel="m:${m.id}">borrar</button>`}</td></tr>`}).join("")}
+    </tbody></table></div>`:`<p class="muted small" style="margin:0">Sin movimientos cargados.</p>`}
+  </div>
+  <div class="panel stack">
+    <h3>Órdenes guardadas</h3>
+    ${list.length?`<div class="tframe"><table><thead><tr><th>Llega</th><th>Pedida</th><th class="n">Renglones</th><th class="n">Cajas</th><th>Origen</th><th></th></tr></thead><tbody>
+    ${list.map(o=>{const n=Object.keys(o.items||{}).length,c=Object.values(o.items||{}).reduce((a,b)=>a+Number(b),0);
+      return`<tr><td><b>${fmtD(o.deliveryDate)}</b></td><td>${fmtD(o.orderDate)}</td><td class="n">${n}</td><td class="n">${c}</td><td class="small muted">${o.source==="app"?"Armada acá":esc(o.source||"Importada")}</td>
+      <td class="n">${conf==="o:"+o.deliveryDate?`<button class="btn danger" data-delord="${o.deliveryDate}">Borrar</button> <button class="link" data-cancelconf>no</button>`:`<button class="link" data-viewo="${o.deliveryDate}">ver</button> · <button class="link" data-askdel="o:${o.deliveryDate}">borrar</button>`}</td></tr>
+      ${S.ui.viewOrder===o.deliveryDate?`<tr><td colspan="6"><div class="small" style="columns:2 220px">${Object.entries(o.items).map(([w,q])=>`<div>${esc(item(w)?.d||w)} — <b class="num">${q}</b></div>`).join("")}</div></td></tr>`:""}`}).join("")}
+    </tbody></table></div>`:`<div class="empty"><b>Todavía no hay órdenes</b>Cargá el archivo que exportás del sistema.</div>`}
+  </div></div>`;
+}
+
+/* ---- GC ---- */
+function renderGC(){
+  const t=todayKey();const from=S.ui.gcFrom||(S.ui.gcFrom=prevCountDay(prevCountDay(prevCountDay(t))));const to=addDays(from,34);
+  let rows="",d=addDays(from,1),cyc={p:0,r:0,start:d};
+  while(d<=to){const v=S.gc[d]||{};
+    rows+=`<tr class="${d===t?"today":""}"><td><b>${fmtD(d)}</b>${d===t?' <span class="chip neu">hoy</span>':""}</td>
+      <td><input class="n" inputmode="numeric" data-gc="p" data-d="${d}" value="${v.p??""}" aria-label="GC proyectados ${fmtD(d)}"></td>
+      <td><input class="n" inputmode="numeric" data-gc="r" data-d="${d}" value="${v.r??""}" aria-label="GC reales ${fmtD(d)}"></td></tr>`;
+    cyc.p+=Number(v.p)||0;cyc.r+=Number(v.r)||0;
+    if(isCountDay(d)){rows+=`<tr class="cyc"><td>Ciclo ${fmtD(cyc.start)} → ${fmtD(d)}</td><td class="n">${fmt(cyc.p,0)}</td><td class="n">${fmt(cyc.r,0)}</td></tr>`;cyc={p:0,r:0,start:addDays(d,1)}}
+    d=addDays(d,1)}
+  return`<div class="stack">
+  <div class="row"><h2>GC por día</h2><span class="spacer"></span><button class="btn" data-gcshift="-14">← 2 semanas</button><button class="btn" data-gcshift="0">Hoy</button><button class="btn" data-gcshift="14">2 semanas →</button></div>
+  <p class="muted small" style="max-width:65ch;margin:0">Proyectados: los que usa el cálculo del pedido. Reales: opcionales; con ellos la app calcula tu propio uso cada mil a partir de los conteos. Podés pegar una columna copiada de Excel en la primera celda y se reparte hacia abajo.</p>
+  <div class="tframe gc" style="max-width:520px"><table><thead><tr><th>Día</th><th class="n">GC proyectados</th><th class="n">GC reales</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+/* ---- Ajustes ---- */
+function renderAjustes(){
+  const c=S.config,all=Object.values(cat()),q=S.ui.catSearch.trim().toLowerCase(),inList=new Set(c.countOrder),inPed=new Set(c.pedidoOrder||[]);
+  const list=all.filter(i=>!q||i.d.toLowerCase().includes(q)||i.w.includes(q)).sort((a,b)=>((inList.has(b.w)||inPed.has(b.w))-(inList.has(a.w)||inPed.has(a.w)))||a.d.localeCompare(b.d));
+  return`<div class="stack"><h2>Catálogo y ajustes</h2>
+  <div class="grid2">
+  <div class="panel stack"><h3>Reporte de uso cada mil</h3>
+    <p class="small muted" style="margin:0">${S.catalog?`Catálogo actual: ${all.length} productos, fecha de negocio ${fmtD(S.catalog.reportDate)}${S.catalog.source?` (${esc(S.catalog.source)})`:""}.`:"Todavía no se cargó ningún reporte."} Al cargar uno nuevo se actualizan el uso cada mil y la cantidad por caja; tus conteos, órdenes y el orden de la lista se mantienen.</p>
+    <div class="row"><label class="btn primary" for="usoFile">Cargar PDF de uso</label><input type="file" id="usoFile" accept="application/pdf,.pdf" hidden></div>
+    <details id="usoPaste"><summary class="small">¿El PDF no se lee? Pegá el texto</summary><p class="small muted">Abrí el PDF, seleccioná todo, copiá y pegá acá.</p><textarea id="usoText"></textarea><button class="btn" id="usoTextBtn">Leer texto</button></details>
+    <div id="usoMsg"></div></div>
+  <div class="panel stack"><h3>Lista de productos</h3>
+    <p class="small muted" style="margin:0">Pedido: ${(S.config.pedidoOrder||[]).length} productos · Conteo: ${countList().length}. Cargá un Excel (hoja Pedido, columna Wrin) o un PDF de uso para actualizar la lista: los productos nuevos se agregan al final del pedido y del conteo, y los que ya no están se quitan de los dos. El orden de cada lista no cambia.</p>
+    <div class="row"><label class="btn" for="listFile">Actualizar lista con Excel o PDF</label><input type="file" id="listFile" accept=".xlsx,.xls,.xlsm,.pdf,application/pdf" hidden></div>
+    ${(()=>{const L=S.ui.listUpd;if(!L)return"";if(L.error)return`<div class="note bad">${esc(L.error)}</div>`;const D=listDiff(L);const nm=w=>esc(item(w)?.d||L.descs[w]||w);
+      return`<div class="note info">${esc(L.fileName)}: ${L.list.length} productos.<br>Se agregan (${D.add.length}): ${D.add.map(nm).join(", ")||"ninguno"}.<br>Se quitan (${D.rem.length}): ${D.rem.map(nm).join(", ")||"ninguno"}.</div>
+      <div class="row"><button class="btn primary" id="listApply" ${D.add.length||D.rem.length?"":"disabled"}>Aplicar cambios</button><button class="btn" id="listCancel">Cancelar</button></div>`})()}
+  </div>
+  <div class="panel stack"><h3>Cálculo del pedido</h3>
+    <label class="field"><span>Uso cada mil a usar</span><select id="cfgUso">${[["us","Semanal (reporte)"],["ud","Diario (reporte)"],["um_","Mensual (reporte)"],["real","Real de mis conteos (si no hay, semanal)"]].map(([k,l])=>`<option value="${k}" ${c.usoBase===k?"selected":""}>${l}</option>`).join("")}</select></label>
+    <label class="field"><span>Margen de seguridad (%)</span><input id="cfgSafety" class="n" inputmode="decimal" value="${c.safety||0}" style="max-width:120px"></label>
+    <label class="row" style="gap:8px"><input type="checkbox" id="cfgCBD" ${c.countBeforeDelivery?"checked":""} style="min-height:auto;width:20px;height:20px"><span>Cuento antes de guardar la descarga del día <span class="small muted">(la orden que llega ese día se suma como stock)</span></span></label>
+    <label class="field"><span>Final de línea para exportar JBO</span><input id="cfgTrailer" value="${esc(c.trailer)}" style="max-width:160px"></label>
+    <label class="row" style="gap:8px"><input type="checkbox" id="cfgAll" ${c.showAllInPedido?"checked":""} style="min-height:auto;width:20px;height:20px"><span>Mostrar todo el catálogo en Pedido (no solo la lista de conteo)</span></label>
+  </div></div>
+  ${A===GH?`<div class="panel stack" style="max-width:520px"><h3>Contraseña de acceso</h3>
+    <form id="pwChangeForm" class="stack" style="gap:10px"><label class="field"><span>Nueva contraseña</span><input id="pcNew" type="password" autocomplete="new-password"></label>
+    <label class="field"><span>Repetir</span><input id="pcNew2" type="password" autocomplete="new-password"></label>
+    <div class="row"><button class="btn" type="submit">Cambiar contraseña</button><span class="small" id="pcMsg"></span></div></form></div>`:""}
+  <div class="row"><h3 style="margin:0">Productos</h3><span class="spacer"></span><input type="search" id="catSearch" placeholder="Buscar" value="${esc(S.ui.catSearch)}"></div>
+  <div class="tframe"><table><thead><tr><th class="stick">Producto</th><th>UM</th><th class="n">Cant/caja</th><th class="n">U/subunidad</th><th class="n">Uso/mil día</th><th class="n">sem</th><th class="n">mes</th><th>En pedido</th><th>En conteo</th></tr></thead>
+  <tbody>${list.map(i=>`<tr><td class="stick prod"><b>${esc(i.d)}</b><div class="w">${i.w}</div></td><td>${i.um}</td>
+    <td class="n"><input class="n" style="width:90px" inputmode="decimal" data-cc="${i.w}" value="${i.cc??""}"></td>
+    <td class="n"><input class="n" style="width:90px" inputmode="decimal" data-sub="${i.w}" value="${subSize(i.w)||""}" placeholder="—"></td>
+    <td class="n">${fmt(i.ud,2)}</td><td class="n">${fmt(i.us,2)}</td><td class="n">${fmt(i.um_,2)}</td>
+    <td><input type="checkbox" data-inped="${i.w}" ${inPed.has(i.w)?"checked":""} style="min-height:auto;width:20px;height:20px" aria-label="Incluir ${esc(i.d)} en el pedido"></td>
+    <td><input type="checkbox" data-inlist="${i.w}" ${inList.has(i.w)?"checked":""} style="min-height:auto;width:20px;height:20px" aria-label="Incluir ${esc(i.d)} en el conteo"></td></tr>`).join("")}</tbody></table></div>
+  <p class="small muted">${A===GH?`Datos guardados en el repositorio privado ${esc(GH.creds.repo)} de GitHub.`:A?.name==="claude"?"Datos guardados en esta app de Claude; los ves desde cualquier dispositivo con tu cuenta.":"Datos guardados solo en este dispositivo."}</p>
+  </div>`;
+}
+
+/* ================= events ================= */
+function countDoc(D){return S.counts[D]||(S.counts[D]={date:D,items:{},status:"borrador"})}
+function saveCountDraft(D,delay=900){const d=S.counts[D];d.updatedAt=new Date().toISOString();if(d.status==="guardado"&&S.ui.editing[D])d.status="borrador";persist("conteos/"+D,d,delay)}
+document.addEventListener("click",async e=>{
+  const t=e.target.closest("button,[data-go]");if(!t)return;const ds=t.dataset;
+  if(ds.tab){S.ui.tab=ds.tab;S.ui.confirm=null;try{history.replaceState(null,"","#"+ds.tab)}catch(_){}render();window.scrollTo(0,0);return}
+  if(ds.go){S.ui.tab=ds.go;if(ds.date)S.ui.countDate=ds.date;render();window.scrollTo(0,0);return}
+  if(t.id==="goSetup"){S.ui.login={mode:"setup",msg:""};renderLogin();return}
+  if(t.id==="goPw"){S.ui.login={mode:"pw",msg:""};renderLogin();return}
+  if(t.id==="hdrRefresh"){if(A===GH){await flushAll();GH.refresh()}return}
+  if(t.id==="hdrLogout"){await flushAll();logout("");return}
+  if(ds.pedfilter){S.ui.pedFilter=ds.pedfilter;render();return}
+  if(ds.pedunit){S.ui.pedUnit=ds.pedunit;render();return}
+  if(ds.cfilter){S.ui.countFilter=ds.cfilter;render();return}
+  if(ds.csort){S.ui.countSort=ds.csort;render();return}
+  if(ds.cdate){S.ui.countDate=ds.cdate;S.ui.confirm=null;render();window.scrollTo(0,0);return}
+  if(ds.movtipo){S.ui.movTipo=ds.movtipo;document.querySelectorAll("[data-movtipo]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.movtipo===ds.movtipo));return}
+  if(ds.gcshift){const n=Number(ds.gcshift);S.ui.gcFrom=n?addDays(S.ui.gcFrom,n):null;render();return}
+  if(t.id==="startSort"){S.ui.sorting=true;render();return}
+  if(t.id==="endSort"){S.ui.sorting=false;render();toast("Orden de la lista guardado");return}
+  if(ds.mv){const o=S.config.countOrder,i=o.indexOf(ds.w),j=i+Number(ds.mv);if(i<0||j<0||j>=o.length)return;[o[i],o[j]]=[o[j],o[i]];saveConfig();render();return}
+  if(ds.hide){S.config.countOrder=S.config.countOrder.filter(w=>w!==ds.hide);saveConfig();render();return}
+  if(t.id==="saveCount"){const D=S.ui.countDate;const d=countDoc(D);d.status="guardado";d.savedAt=new Date().toISOString();d.updatedAt=d.savedAt;delete S.ui.editing[D];
+    persist("conteos/"+D,d,0);await flush("conteos/"+D);render();toast("Conteo del "+fmtD(D)+" guardado");return}
+  if(t.id==="editCount"||t.id==="editCount2"){S.ui.editing[S.ui.countDate]=true;render();return}
+  if(t.id==="xlsApply"){const X=S.ui.xls;const D=$("#xlsDate").value||S.ui.countDate;const d=countDoc(D);
+    Object.assign(d.items,X.items);d.status="borrador";d.source=X.fileName;S.ui.editing[D]=true;saveCountDraft(D,0);
+    S.ui.xls=null;S.ui.countDate=D;render();toast(Object.keys(X.items).length+" productos cargados en el "+fmtD(D)+". Revisá y guardá.");return}
+  if(t.id==="listCancel"){S.ui.listUpd=null;render();return}
+  if(t.id==="listApply"){const L=S.ui.listUpd;const Dd=listDiff(L);
+    if(L.kind==="pdf")applyUso(L.uso,L.fileName);
+    if(L.extra){Object.values(L.extra).forEach(i=>{if(!item(i.w))S.catalog.items[i.w]=i});saveCatalog()}
+    const rem=new Set(Dd.rem);
+    S.config.pedidoOrder=[...(S.config.pedidoOrder||[]).filter(w=>!rem.has(w)),...Dd.add];
+    S.config.countOrder=[...S.config.countOrder.filter(w=>!rem.has(w)),...Dd.add.filter(w=>!S.config.countOrder.includes(w))];
+    saveConfig();S.ui.listUpd=null;render();toast(`Lista actualizada: ${Dd.add.length} agregados, ${Dd.rem.length} quitados`);return}
+  if(t.id==="xlsCancel"){S.ui.xls=null;render();return}
+  if(t.id==="savePed"||t.id==="copyPed"){
+    const P=computePedido(S.ui.pedDate),draft=S.ui.pedDraft[P.D1]||{},saved=Object.values(S.orders).find(o=>o.deliveryDate===P.D1);
+    const qty=r=>draft[r.w]!=null?draft[r.w]:(saved?(saved.items[r.w]||0):r.sug);
+    if(t.id==="savePed"){const items={};P.rows.forEach(r=>{const q=Number(qty(r))||0;if(q>0)items[r.w]=q});
+      const o={deliveryDate:P.D1,orderDate:P.D,items,trailer:S.config.trailer,source:"app"};S.orders[P.D1]=o;persist("ordenes/"+P.D1,o,0);delete S.ui.pedDraft[P.D1];render();toast("Orden guardada: llega el "+fmtD(P.D1));return}
+    const txt=buildJBO(P,qty),ta=$("#jboOut");ta.hidden=false;ta.value=txt;
+    try{await navigator.clipboard.writeText(txt);toast("Copiado en formato JBO")}catch(_){ta.focus();ta.select();toast("Seleccioná y copiá el texto de abajo")}return}
+  if(t.id==="resetPed"){const P=computePedido(S.ui.pedDate),d={};P.rows.forEach(r=>d[r.w]=r.sug);S.ui.pedDraft[P.D1]=d;render();return}
+  if(t.id==="jboParse"){S.ui.ordText=$("#jboText").value;S.ui.ordPreview=parseJBO(S.ui.ordText);render();return}
+  if(t.id==="jboCancel"){S.ui.ordPreview=null;S.ui.ordText="";render();return}
+  if(t.id==="jboSave"){const P=S.ui.ordPreview;if(!P||!P.deliveryDate)return;
+    if(P.unknown.length){P.unknown.forEach(w=>{S.catalog.items[w]={w,d:P.descs[w],um:"UNI",cc:1,ud:null,us:null,um_:null}});saveCatalog()}
+    if(P.trailer&&P.trailer!==S.config.trailer){S.config.trailer=P.trailer;saveConfig()}
+    const o={deliveryDate:P.deliveryDate,orderDate:P.orderDate,items:P.items,trailer:P.trailer,source:S.ui.ordFile||"Importada"};
+    S.orders[P.deliveryDate]=o;persist("ordenes/"+P.deliveryDate,o,0);S.ui.ordPreview=null;S.ui.ordText="";S.ui.ordFile=null;render();toast("Orden guardada: llega el "+fmtD(o.deliveryDate));return}
+  if(ds.askdel){S.ui.confirm=ds.askdel;render();return}
+  if(t.hasAttribute("data-cancelconf")){S.ui.confirm=null;render();return}
+  if(ds.delord){delete S.orders[ds.delord];S.ui.confirm=null;render();await removeDoc("ordenes/"+ds.delord);toast("Orden borrada");return}
+  if(ds.delcount){delete S.counts[ds.delcount];delete pending["conteos/"+ds.delcount];S.ui.confirm=null;render();await removeDoc("conteos/"+ds.delcount);toast("Conteo borrado");return}
+  if(ds.delmov){const id=ds.delmov;for(const[mk,m]of Object.entries(S.movs)){const i=(m.items||[]).findIndex(x=>x.id===id);if(i>=0){m.items.splice(i,1);persist("movimientos/"+mk,m,0)}}
+    S.ui.confirm=null;render();toast("Movimiento borrado");return}
+  if(ds.viewo){S.ui.viewOrder=S.ui.viewOrder===ds.viewo?null:ds.viewo;render();return}
+  if(t.id==="usoTextBtn"){usoResult(parseUsoLines($("#usoText").value.split(/\r?\n/)),"texto pegado");return}
+});
+document.addEventListener("submit",e=>{
+  if(e.target.id!=="movForm")return;e.preventDefault();
+  const M=S.ui.mov;M.prod=$("#movProd").value;M.date=$("#movDate").value;M.cajas=$("#movCajas").value;M.unid=$("#movUnid").value;M.nota=$("#movNota").value;
+  const msg=$("#movMsg");
+  const wm=M.prod.match(/(\d+\s*\/\s*\d+)\s*$/);const w=wm?normWrin(wm[1]):null;
+  if(!w||!item(w)){msg.innerHTML='<span style="color:var(--bad)">Elegí el producto de la lista.</span>';return}
+  if(!M.date){msg.innerHTML='<span style="color:var(--bad)">Falta la fecha.</span>';return}
+  const cj=parseNum(M.cajas)||0,un=parseNum(M.unid)||0;
+  if(!cj&&!un){msg.innerHTML='<span style="color:var(--bad)">Poné cajas o unidades.</span>';return}
+  const sign=S.ui.movTipo==="sale"?-1:1;const units=sign*(cj*(item(w).cc||0)+un);
+  const mk=M.date.slice(0,7);const doc=S.movs[mk]||(S.movs[mk]={month:mk,items:[]});
+  doc.items.push({id:uid(),date:M.date,w,cajas:cj,unid:un,units,tipo:S.ui.movTipo,nota:M.nota.trim(),ts:new Date().toISOString()});
+  persist("movimientos/"+mk,doc,0);
+  S.ui.mov={date:M.date,prod:"",cajas:"",unid:"",nota:""};render();toast(`Movimiento agregado: ${sign>0?"entra":"sale"} ${item(w).d}`);
+});
+function usoResult(p,name){
+  const n=Object.keys(p.items).length;
+  if(!n){$("#usoMsg").innerHTML=`<div class="note bad">No encontré productos en ese reporte. Revisá que sea el "Reporte de uso cada mil".</div>`;return}
+  const first=!Object.keys(cat()).length;const r=applyUso(p,name);
+  if(first||!S.config.countOrder.length){S.config.countOrder=Object.keys(p.items);saveConfig()}
+  render();$("#usoMsg").innerHTML=`<div class="note info">Listo: ${r.upd} productos actualizados, ${r.nw} nuevos${p.date?`, fecha de negocio ${fmtD(p.date)}`:""}.</div>`;
+}
+document.addEventListener("input",e=>{
+  const t=e.target,ds=t.dataset;
+  if(t.id==="pedSearch"){S.ui.pedSearch=t.value;debRender();return}
+  if(t.id==="countSearch"){S.ui.countSearch=t.value;debRender();return}
+  if(t.id==="catSearch"){S.ui.catSearch=t.value;debRender();return}
+  if(ds.c!=null&&ds.w){const D=S.ui.countDate;if(countLocked(D))return;const doc=countDoc(D);
+    const e3=(doc.items[ds.w]||[null,null,null]).slice();e3[Number(ds.c)]=parseNum(t.value);
+    if(e3.every(v=>v==null))delete doc.items[ds.w];else doc.items[ds.w]=e3;
+    const cell=document.querySelector(`[data-tot="${CSS.escape(ds.w)}"]`),tot=entryTotal(ds.w,doc.items[ds.w]);
+    if(cell)cell.innerHTML=totHTML(ds.w,tot,D);t.closest(".crow")?.classList.toggle("done",tot!=null);
+    const list=countList(),done=list.filter(w=>entryTotal(w,doc.items[w])!=null).length,chip=$("#doneChip");
+    if(chip){chip.textContent=`${done} de ${list.length} contados`;chip.className="chip "+(done===list.length?"ok":"neu")}
+    saveCountDraft(D);return}
+  if(ds.ped){const D1=nextCountDay(S.ui.pedDate);(S.ui.pedDraft[D1]||(S.ui.pedDraft[D1]={}))[ds.ped]=parseNum(t.value)??0;return}
+  if(ds.gc){const v=parseNum(t.value);const d=S.gc[ds.d]||(S.gc[ds.d]={});if(v==null)delete d[ds.gc];else d[ds.gc]=v;if(!Object.keys(d).length)delete S.gc[ds.d];saveGC();return}
+  if(ds.cc){const it=item(ds.cc),v=parseNum(t.value);if(it&&v){it.cc=v;saveCatalog()}return}
+  if(ds.sub){const v=parseNum(t.value);S.config.subSize={...S.config.subSize};if(v)S.config.subSize[ds.sub]=v;else delete S.config.subSize[ds.sub];saveConfig();return}
+  if(t.id==="cfgSafety"){S.config.safety=parseNum(t.value)||0;saveConfig();return}
+  if(t.id==="cfgTrailer"){S.config.trailer=t.value.trim();saveConfig();return}
+});
+document.addEventListener("change",async e=>{
+  const t=e.target,ds=t.dataset;
+  if(t.id==="pedDate"){S.ui.pedDate=t.value;render();return}
+  if(t.id==="countDate"){if(t.value){S.ui.countDate=t.value;render()}return}
+  if(t.id==="xlsDate"){if(S.ui.xls)S.ui.xls.date=t.value;render();return}
+  if(t.id==="cfgUso"){S.config.usoBase=t.value;saveConfig();return}
+  if(t.id==="cfgCBD"){S.config.countBeforeDelivery=t.checked;saveConfig();return}
+  if(t.id==="cfgAll"){S.config.showAllInPedido=t.checked;saveConfig();return}
+  if(ds.inped){const w=ds.inped;const p=S.config.pedidoOrder||[];if(t.checked){if(!p.includes(w))p.push(w)}else S.config.pedidoOrder=p.filter(x=>x!==w);if(t.checked)S.config.pedidoOrder=p;saveConfig();return}
+  if(t.id==="listFile"&&t.files[0]){const f=t.files[0];try{S.ui.listUpd=await parseListFile(f)}catch(err){console.error(err);S.ui.listUpd={fileName:f.name,error:"No pude leer "+f.name+": "+(err.message||err)}}t.value="";render();return}
+  if(ds.inlist){const w=ds.inlist;if(t.checked){if(!S.config.countOrder.includes(w))S.config.countOrder.push(w)}else S.config.countOrder=S.config.countOrder.filter(x=>x!==w);saveConfig();return}
+  if(ds.ped!=null){render();return}
+  if(t.id==="xlsFile"&&t.files[0]){const f=t.files[0];try{S.ui.xls={...await parseCountExcel(f),date:S.ui.countDate}}catch(err){console.error(err);S.ui.xls={fileName:f.name,error:"No pude leer el Excel: "+(err.message||err)}}t.value="";render();return}
+  if(t.id==="jboFile"&&t.files[0]){const f=t.files[0];const txt=new TextDecoder("iso-8859-1").decode(await f.arrayBuffer());S.ui.ordText=txt;S.ui.ordFile=f.name;S.ui.ordPreview=parseJBO(txt);t.value="";render();return}
+  if(t.id==="usoFile"&&t.files[0]){const f=t.files[0];$("#usoMsg").innerHTML=`<div class="note info">Leyendo ${esc(f.name)}…</div>`;
+    try{usoResult(parseUsoLines(await pdfToLines(f)),f.name)}catch(err){console.error(err);$("#usoMsg").innerHTML=`<div class="note bad">No pude leer el PDF (${esc(err.message||err)}). Probá pegando el texto.</div>`}t.value="";return}
+});
+document.addEventListener("paste",e=>{
+  const t=e.target;if(!t.matches?.("[data-gc]"))return;
+  const vals=(e.clipboardData||window.clipboardData).getData("text").replace(/\r/g,"").replace(/\n$/,"").split("\n").map(s=>s.split("\t")[0].trim());
+  if(vals.length<2)return;e.preventDefault();let d=t.dataset.d;const f=t.dataset.gc;
+  vals.forEach(v=>{const n=parseNum(v);const o=S.gc[d]||(S.gc[d]={});if(n==null)delete o[f];else o[f]=n;d=addDays(d,1)});saveGC();render();toast(vals.length+" días cargados");
+});
+let dr=null;function debRender(){clearTimeout(dr);dr=setTimeout(()=>{const a=document.activeElement,id=a?.id,pos=a?.selectionStart;render();if(id){const el=document.getElementById(id);if(el){el.focus();try{el.setSelectionRange(pos,pos)}catch(_){}}}},180)}
+document.addEventListener("keydown",e=>{
+  if(e.key==="Enter"&&e.target.matches?.("#main input.n")&&!e.target.closest("form")){e.preventDefault();const ins=[...document.querySelectorAll("#main input.n:not(:disabled)")];const i=ins.indexOf(e.target);
+    const nx=ins[i+(e.target.dataset.c!=null?3:1)]||ins[i+1];nx?.focus();nx?.select?.()}
+});
+function wireDrag(){
+  const listEl=$("#sortList");if(!listEl)return;
+  listEl.querySelectorAll(".handle").forEach(h=>h.addEventListener("pointerdown",ev=>{
+    ev.preventDefault();const row=h.closest(".crow");row.classList.add("dragging");h.setPointerCapture(ev.pointerId);let over=null;
+    const move=e=>{const el=document.elementFromPoint(e.clientX,e.clientY)?.closest("#sortList .crow");
+      if(over&&over!==el)over.classList.remove("dropbefore");if(el&&el!==row){el.classList.add("dropbefore");over=el}
+      if(e.clientY<70)window.scrollBy(0,-12);else if(e.clientY>window.innerHeight-50)window.scrollBy(0,12)};
+    const up=()=>{h.removeEventListener("pointermove",move);h.removeEventListener("pointerup",up);h.removeEventListener("pointercancel",up);row.classList.remove("dragging");
+      if(over){over.classList.remove("dropbefore");const o=S.config.countOrder.filter(w=>w!==row.dataset.w);o.splice(o.indexOf(over.dataset.w),0,row.dataset.w);S.config.countOrder=o;saveConfig();render()}};
+    h.addEventListener("pointermove",move);h.addEventListener("pointerup",up);h.addEventListener("pointercancel",up);
+  }));
+}
+(function(){const h=(location.hash||"").slice(1);if(["pedido","conteo","ordenes","gc","ajustes"].includes(h))S.ui.tab=h})();
+window.addEventListener("pagehide",()=>{Object.keys(pending).forEach(flush)});
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")Object.keys(pending).forEach(flush)});
+render();boot();
+
+</script>
+</body></html>
